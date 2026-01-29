@@ -3,7 +3,8 @@ numpy
 torch
 scikit-learn
 tellurium
-streamlit
+streamlit>=1.31.0
+
 plotly
 watchdog
 altair<5
