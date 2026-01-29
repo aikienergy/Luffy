@@ -6,3 +6,4 @@ tellurium
 streamlit
 plotly
 watchdog
+altair<5
