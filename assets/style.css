@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
+
+/* global typography */
+html,
+body,
+.stApp {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: #000000 !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* header logo injection */
+[data-testid="stHeader"]::after {
+    content: "🧬 Cellulose Devourer Design | LUFFY";
+    position: absolute;
+    top: 20px;
+    left: 80px;
+    font-size: 20px;
+    font-weight: 800;
+    color: #111827;
+    font-family: 'Inter', sans-serif;
+}
+
+/* responsive header fix: hide logo on small screens to prevent overlap */
+@media (max-width: 640px) {
+    [data-testid="stHeader"]::after {
+        display: none;
+    }
+}
+
+header[data-testid="stHeader"] {
+    background-color: #FFFFFF !important;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+div[data-testid="stDecoration"] {
+    background-color: #10B981;
+}
+
+/* widgets */
+.stSelectbox label,
+.stSlider label,
+.stNumberInput label {
+    color: #374151 !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+}
+
+/* aggressive radio button styling */
+div[role="radiogroup"] p {
+    color: #374151 !important;
+    font-weight: 500 !important;
+    font-size: 1.0rem !important;
+}
+
+div[data-testid="stRadio"] label p {
+    color: #374151 !important;
+    font-weight: 500 !important;
+}
+
+/* slider accent */
+div.stSlider>div[data-baseweb="slider"]>div>div {
+    background-color: #10B981 !important;
+}
+
+div.stSlider>div[data-baseweb="slider"]>div>div>div {
+    color: #10B981 !important;
+}
+
+/* buttons: primary (pill shape) */
+.stButton>button {
+    background-color: #111827 !important;
+    color: #FFFFFF !important;
+    border: none;
+    font-weight: 600;
+    border-radius: 50px !important;
+    height: 48px !important;
+    /* adjusted for toolbar alignment */
+    min-width: 180px !important;
+    font-size: 1rem !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.stButton>button:hover {
+    background-color: #374151 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* custom utility classes */
+
+/* stats card */
+.stats-card {
+    background-color: #F9FAFB;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    border: 1px solid transparent;
+    /* reserved for states */
+}
+
+.stats-card label {
+    display: block;
+    color: #6B7280;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.stats-card .value {
+    display: block;
+    color: #111827;
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.stats-card .subtext {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: #6B7280;
+}
+
+.stats-card.variant-success .value {
+    color: #10B981;
+}
+
+.stats-card.variant-danger .value {
+    color: #EF4444;
+}
+
+/* layout spacers */
+.spacer-vertical {
+    width: 100%;
+    display: block;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+/* RESET: Ensure vanilla Streamlit containers don't have borders/shadows from legacy CSS */
+div[data-testid="stVerticalBlockBorderWrapper"]>div {
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+}
+
+/* OVERRIDE: Transform native Streamlit border containers into Shadow Cards */
+div[data-testid="stVerticalBlockBorderWrapper"]>div {
+    background-color: #FFFFFF !important;
+    border-radius: 12px !important;
+    padding: 1.5rem !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+    /* Tailwind shadow-lg */
+    border: none !important;
+    /* Remove the native gray border */
+    transition: box-shadow 0.3s ease;
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"]>div:hover {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* reduce header whitespace */
+.block-container {
+    padding-top: 5rem !important;
+}
