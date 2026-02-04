@@ -30,6 +30,24 @@ from src.shared.components import load_css, stats_card, section_header, vertical
 # Page Config
 st.set_page_config(page_title="Cellulose Devourer Design | LUFFY", layout="wide", page_icon="🧬")
 
+# Open Graph Meta Tags for Social Media / Blog Embeds
+OG_TITLE = "LUFFY - Cellulose Devourer Design"
+OG_DESCRIPTION = "AI-powered enzyme inverse design platform for biomass-to-ethanol conversion. Discover, engineer, and validate high-performance cellulases."
+OG_IMAGE = "https://raw.githubusercontent.com/aikienergy/Luffy/main/assets/og_image.png"
+OG_URL = "https://enzyme-inverse-design.streamlit.app"
+
+st.markdown(f"""
+    <meta property="og:title" content="{OG_TITLE}">
+    <meta property="og:description" content="{OG_DESCRIPTION}">
+    <meta property="og:image" content="{OG_IMAGE}">
+    <meta property="og:url" content="{OG_URL}">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{OG_TITLE}">
+    <meta name="twitter:description" content="{OG_DESCRIPTION}">
+    <meta name="twitter:image" content="{OG_IMAGE}">
+""", unsafe_allow_html=True)
+
 # -------------------------------------------------------------------------
 # DESIGN SYSTEM (CSS)
 # -------------------------------------------------------------------------
