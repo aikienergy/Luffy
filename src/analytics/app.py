@@ -128,11 +128,17 @@ if page == "vHTS Screening":
         
         with CardContainer():
             # Phase 3: Biomass Preset Selection
+            def on_biomass_change():
+                # Clear previous results when biomass changes
+                st.session_state['screen_results'] = None
+            
             biomass_key = st.selectbox(
                 "🌾 Biomass Type",
                 list(BIOMASS_PRESETS.keys()),
                 format_func=lambda x: BIOMASS_PRESETS[x]['name'],
-                index=0  # Rice straw is default
+                index=0,  # Rice straw is default
+                key="biomass_selector",
+                on_change=on_biomass_change
             )
             preset = BIOMASS_PRESETS[biomass_key]
             
