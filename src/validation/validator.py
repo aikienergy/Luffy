@@ -280,7 +280,23 @@ class EnzymeValidator:
         
         try:
             r = te.loada(model)
-            result = r.simulate(0, duration, steps)
+            
+            # Convergence detection: extend until S < 1% of initial or max 168h
+            MAX_DURATION = 168 * 3600  # 168 hours max
+            CONVERGENCE_THRESHOLD = 0.01  # 1% of initial substrate
+            
+            current_duration = duration
+            result = r.simulate(0, current_duration, steps)
+            
+            # Check if converged (substrate consumed)
+            while result['[S]'][-1] > substrate_conc_init * CONVERGENCE_THRESHOLD:
+                if current_duration >= MAX_DURATION:
+                    break  # Safety limit
+                # Extend by 24 hours
+                current_duration = min(current_duration + 24 * 3600, MAX_DURATION)
+                r.reset()
+                result = r.simulate(0, current_duration, steps)
+            
             return result['time'], result['[S]'], result['[C2]'], result['[G]']
         except Exception as e:
             print(f"MultiEnzyme Error: {e}")
