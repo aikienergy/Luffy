@@ -233,18 +233,31 @@ class EnzymeValidator:
             params_BG['kcat'], temp, ph, params_BG.get('t_opt', 50), params_BG.get('ph_opt', 5)
         )
         
+        # DEBUG: Log initial kcat values
+        print(f"[DEBUG] Initial kcat_eff: EG={kcat_eff_EG:.4f}, BG={kcat_eff_BG:.4f}")
+        print(f"[DEBUG] Biomass params: particle_size={particle_size}, crystallinity={crystallinity}, severity={severity}")
+        print(f"[DEBUG] Lignin params: lignin_content={lignin_content}, biomass_type={biomass_type}")
+        
         # Phase 3: Apply biomass factors to both enzymes
         if particle_size is not None:
             eta_access = self.calculate_accessibility(particle_size, crystallinity, severity)
+            print(f"[DEBUG] eta_access = {eta_access:.4f}")
             kcat_eff_EG *= eta_access
             kcat_eff_BG *= eta_access
+        else:
+            print("[DEBUG] particle_size is None - skipping accessibility")
         
         if lignin_content > 0:
             inh_factor = self.calculate_inhibition_factor(
                 lignin_content, biomass_type, phenol_conc, furfural_conc
             )
+            print(f"[DEBUG] inh_factor = {inh_factor:.4f}")
             kcat_eff_EG *= inh_factor
             kcat_eff_BG *= inh_factor
+        else:
+            print(f"[DEBUG] lignin_content={lignin_content} - skipping inhibition")
+        
+        print(f"[DEBUG] Final kcat_eff: EG={kcat_eff_EG:.6f}, BG={kcat_eff_BG:.6f}")
         
         model = f"""
         model MultiEnzymeSynergy

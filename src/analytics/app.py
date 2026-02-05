@@ -279,6 +279,20 @@ if page == "vHTS Screening":
                 total_enz_mM = (enz_g_L / 50000) * 1000 
                 r_eg = best_hit['ratio']
                 
+                # DEBUG: Show biomass parameters in UI
+                with st.expander("🔍 Debug: Biomass Parameters", expanded=True):
+                    st.write(f"**particle_size**: {particle_size}")
+                    st.write(f"**lignin**: {lignin}")
+                    st.write(f"**severity**: {severity}")
+                    st.write(f"**crystallinity**: {preset.get('crystallinity', 0.7)}")
+                    st.write(f"**biomass_type**: {preset['type']}")
+                    # Calculate factors
+                    eta = validator.calculate_accessibility(particle_size, preset.get('crystallinity', 0.7), severity)
+                    inh = validator.calculate_inhibition_factor(lignin, preset['type'])
+                    st.write(f"**eta_access**: {eta:.4f}")
+                    st.write(f"**inh_factor**: {inh:.4f}")
+                    st.write(f"**combined factor**: {eta * inh:.4f}")
+                
                 t, S, C2, G = validator.run_multienzyme_simulation(
                    p_eg, p_bg, substrate_conc_init=conc_mM,
                    conc_EG=total_enz_mM*r_eg, conc_BG=total_enz_mM*(1.0-r_eg),
@@ -306,14 +320,25 @@ if page == "vHTS Screening":
                               title=f"Reaction Kinetics",
                               color_discrete_sequence=["#10B981"])
                 
-                # Add literature expected range as shaded area
+                # Add literature expected range as rectangle at measurement time
                 lit_glucose_min = conc_mM * lit_min
                 lit_glucose_max = conc_mM * lit_max
-                fig.add_hrect(
-                    y0=lit_glucose_min, y1=lit_glucose_max, 
-                    fillcolor="green", opacity=0.1,
-                    annotation_text=f"Literature Range ({lit_source})",
-                    annotation_position="top right"
+                lit_time_h = preset.get('literature_time_h', 24)
+                
+                # Draw rectangle at literature measurement time (±2h window)
+                fig.add_shape(
+                    type="rect",
+                    x0=lit_time_h - 2, x1=lit_time_h + 2,
+                    y0=lit_glucose_min, y1=lit_glucose_max,
+                    fillcolor="green", opacity=0.2,
+                    line=dict(color="green", width=1)
+                )
+                # Add annotation
+                fig.add_annotation(
+                    x=lit_time_h, y=lit_glucose_max,
+                    text=f"Literature @{lit_time_h}h ({lit_source})",
+                    showarrow=False, yshift=10,
+                    font=dict(size=10, color="#374151")
                 )
                 
                 fig.update_layout(

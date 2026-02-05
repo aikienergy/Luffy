@@ -22,6 +22,7 @@ BIOMASS_PRESETS = {
         'crystallinity': 0.65,
         'type': 'grass',
         'literature_yield': (0.30, 0.40),  # Simple crushing @24h
+        'literature_time_h': 24,  # Measurement time in hours
         'literature_source': 'NIH, MDPI databases'
     },
     'wheat_straw': {
@@ -33,6 +34,7 @@ BIOMASS_PRESETS = {
         'crystallinity': 0.70,
         'type': 'grass',
         'literature_yield': (0.25, 0.30),  # Simple crushing @24h
+        'literature_time_h': 24,
         'literature_source': 'Alvira et al. (2010)'
     },
     'corn_stover': {
@@ -44,6 +46,7 @@ BIOMASS_PRESETS = {
         'crystallinity': 0.68,
         'type': 'grass',
         'literature_yield': (0.25, 0.35),  # Simple crushing @24h
+        'literature_time_h': 24,
         'literature_source': 'NREL Database'
     },
     'bagasse': {
@@ -55,6 +58,7 @@ BIOMASS_PRESETS = {
         'crystallinity': 0.65,
         'type': 'grass',
         'literature_yield': (0.20, 0.30),  # Simple crushing @24h
+        'literature_time_h': 24,
         'literature_source': 'General literature'
     }
 }
