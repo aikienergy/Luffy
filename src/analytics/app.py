@@ -311,9 +311,20 @@ if page == "vHTS Screening":
                 final_glucose = G[-1] if G is not None and len(G) > 0 else 0
                 simulated_yield = final_glucose / conc_mM if conc_mM > 0 else 0
                 
-                # Literature comparison
-                lit_min, lit_max = preset.get('literature_yield', (0.2, 0.4))
-                lit_source = preset.get('literature_source', 'Literature')
+                # Literature comparison - use pretreatment-specific data for rice straw
+                pretreatment_data = PRETREATMENT_PRESETS.get(pretreatment_key, {})
+                
+                if biomass_key == 'rice_straw' and 'rice_straw_literature' in pretreatment_data:
+                    # Use pretreatment-specific literature data
+                    rice_lit = pretreatment_data['rice_straw_literature']
+                    lit_min, lit_max = rice_lit['yield']
+                    lit_time_h = rice_lit['time_h']
+                    lit_source = rice_lit['source']
+                else:
+                    # Fallback to biomass preset defaults
+                    lit_min, lit_max = preset.get('literature_yield', (0.2, 0.4))
+                    lit_time_h = preset.get('literature_time_h', 72)
+                    lit_source = preset.get('literature_source', 'Literature')
                 
                 df_sim = pd.DataFrame({"Time (h)": t/3600, "Glucose (mM)": G})
                 fig = px.line(df_sim, x="Time (h)", y="Glucose (mM)", 
@@ -323,7 +334,6 @@ if page == "vHTS Screening":
                 # Add literature expected range as rectangle at measurement time
                 lit_glucose_min = conc_mM * lit_min
                 lit_glucose_max = conc_mM * lit_max
-                lit_time_h = preset.get('literature_time_h', 24)
                 
                 # Draw rectangle at literature measurement time (±2h window)
                 fig.add_shape(
@@ -336,9 +346,16 @@ if page == "vHTS Screening":
                 # Add annotation
                 fig.add_annotation(
                     x=lit_time_h, y=lit_glucose_max,
-                    text=f"Literature @{lit_time_h}h ({lit_source})",
+                    text=f"Literature @{lit_time_h}h",
                     showarrow=False, yshift=10,
                     font=dict(size=10, color="#374151")
+                )
+                # Add source as second annotation below
+                fig.add_annotation(
+                    x=lit_time_h, y=lit_glucose_min,
+                    text=f"{lit_source}",
+                    showarrow=False, yshift=-15,
+                    font=dict(size=8, color="#6B7280")
                 )
                 
                 fig.update_layout(

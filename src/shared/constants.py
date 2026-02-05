@@ -64,24 +64,51 @@ BIOMASS_PRESETS = {
 }
 
 # Pretreatment severity mapping to Combined Severity Factor (CSF)
+# Now includes rice straw specific literature data
 PRETREATMENT_PRESETS = {
     'simple_crushing': {
         'name': 'Simple Crushing',
         'severity': 0.0,
         'csf_range': None,
-        'description': 'Mechanical crushing only (blender/mixer)'
+        'description': 'Mechanical crushing only (blender/mixer)',
+        'rice_straw_literature': {
+            'yield': (0.30, 0.40),
+            'time_h': 72,
+            'source': 'MDPI (2023) - Untreated rice straw hydrolysis'
+        }
+    },
+    'dilute_acid': {
+        'name': 'Dilute Acid',
+        'severity': 0.6,
+        'csf_range': (1.5, 2.5),
+        'description': '0.5-2% H2SO4, 121°C, 60 min',
+        'rice_straw_literature': {
+            'yield': (0.28, 0.36),
+            'time_h': 72,
+            'source': 'RSC Advances (2019) - Dilute acid pretreatment optimization'
+        }
     },
     'mild_hydrothermal': {
-        'name': 'Mild Hydrothermal',
+        'name': 'Hydrothermal',
         'severity': 0.5,
         'csf_range': (1.5, 2.5),
-        'description': '120-160°C, 10-30 min'
+        'description': '180-210°C, 10-30 min, hot water',
+        'rice_straw_literature': {
+            'yield': (0.50, 0.70),
+            'time_h': 48,
+            'source': 'NIH/PubMed (2020) - Hydrothermal pretreatment of rice straw'
+        }
     },
     'steam_explosion': {
         'name': 'Steam Explosion',
         'severity': 1.0,
         'csf_range': (3.0, 4.0),
-        'description': '180-220°C, 3-10 min, rapid decompression'
+        'description': '210°C, 10 min, rapid decompression',
+        'rice_straw_literature': {
+            'yield': (0.80, 1.00),
+            'time_h': 72,
+            'source': 'NIH/PubMed (2018) - Steam explosion at 210°C'
+        }
     }
 }
 
