@@ -26,6 +26,7 @@ from src.data_engineering.dataset_manager import DatasetManager
 from src.validation.validator import EnzymeValidator
 from src.resources.materials import BIOMASS_DATA
 from src.shared.components import load_css, stats_card, section_header, vertical_spacer, CardContainer, card_begin, card_end
+from src.shared.constants import BIOMASS_PRESETS, PRETREATMENT_PRESETS
 
 # Page Config
 st.set_page_config(page_title="Cellulose Devourer Design | LUFFY", layout="wide", page_icon="🧬")
@@ -123,20 +124,55 @@ if page == "vHTS Screening":
         # vertical_spacer(3.5) # Align with Right Side Toolbar (Button + Gap)
         vertical_spacer(5)
         
-        section_header("Substrate & Screening", "Define Material and Run vHTS")
+        section_header("Biomass & Pretreatment", "Real Biomass Simulation Settings")
         
         with CardContainer():
-            # Substrate Selection
-            mat_name = st.selectbox("Material Class", list(BIOMASS_DATA.keys()))
+            # Phase 3: Biomass Preset Selection
+            biomass_key = st.selectbox(
+                "🌾 Biomass Type",
+                list(BIOMASS_PRESETS.keys()),
+                format_func=lambda x: BIOMASS_PRESETS[x]['name'],
+                index=0  # Rice straw is default
+            )
+            preset = BIOMASS_PRESETS[biomass_key]
+            
+            # Show literature source
+            st.caption(f"📚 Reference: {preset['literature_source']}")
+            
+            # Auto-fill from preset (user can override)
+            lignin = st.slider(
+                "Lignin Content (%)", 5, 30, 
+                int(preset['lignin'] * 100)
+            ) / 100
+            
+            particle_size = st.slider(
+                "Particle Size (mm)", 0.1, 5.0, 
+                preset['particle_size']
+            )
+            
+            # Pretreatment Selection
+            pretreatment_key = st.selectbox(
+                "🔨 Pretreatment",
+                list(PRETREATMENT_PRESETS.keys()),
+                format_func=lambda x: PRETREATMENT_PRESETS[x]['name']
+            )
+            severity = PRETREATMENT_PRESETS[pretreatment_key]['severity']
+            
+            st.divider()
+            
+            # Substrate Calculation (mM Cellulose)
             load = st.slider("Solid Loading (g/L)", 10.0, 300.0, 100.0)
+            pct_cel = preset['cellulose']
+            conc_mM = (load * pct_cel / 162) * 1000
             
-            # Calculation (mM Cellulose)
-            pct_cel = BIOMASS_DATA[mat_name]['composition'].get('Cellulose', 0)
-            conc_mM = (load * (pct_cel/100) / 162) * 1000 
-            
-            # Persist substrate concentration
+            # Persist biomass parameters to session state
             st.session_state['substrate_conc_mM'] = conc_mM
-            st.session_state['substrate_name'] = mat_name
+            st.session_state['substrate_name'] = preset['name']
+            st.session_state['biomass_preset'] = preset
+            st.session_state['lignin_content'] = lignin
+            st.session_state['particle_size'] = particle_size
+            st.session_state['pretreatment_severity'] = severity
+            st.session_state['biomass_type'] = preset['type']
             
             stats_card("Target Cellulose", f"{conc_mM:.0f}", "mM", variant="default")
             
@@ -243,10 +279,29 @@ if page == "vHTS Screening":
                    duration=48*3600, temp=50.0, ph=5.0
                 )
                 
+                # Calculate simulated yield
+                final_glucose = G[-1] if G is not None and len(G) > 0 else 0
+                simulated_yield = final_glucose / conc_mM if conc_mM > 0 else 0
+                
+                # Literature comparison
+                lit_min, lit_max = preset.get('literature_yield', (0.2, 0.4))
+                lit_source = preset.get('literature_source', 'Literature')
+                
                 df_sim = pd.DataFrame({"Time": t/3600, "Glucose": G})
                 fig = px.line(df_sim, x="Time", y="Glucose", 
                               title=f"Reaction Kinetics (48h)",
                               color_discrete_sequence=["#10B981"])
+                
+                # Add literature expected range as shaded area
+                lit_glucose_min = conc_mM * lit_min
+                lit_glucose_max = conc_mM * lit_max
+                fig.add_hrect(
+                    y0=lit_glucose_min, y1=lit_glucose_max, 
+                    fillcolor="green", opacity=0.1,
+                    annotation_text=f"Literature Range ({lit_source})",
+                    annotation_position="top right"
+                )
+                
                 fig.update_layout(
                     margin=dict(l=0, r=0, t=30, b=0),
                     paper_bgcolor='rgba(0,0,0,0)',
@@ -254,11 +309,32 @@ if page == "vHTS Screening":
                     font=dict(family='Inter, sans-serif'),
                     xaxis=dict(showgrid=False, linecolor='#E5E7EB'),
                     yaxis=dict(showgrid=True, gridcolor='#F3F4F6'),
-                    # Removed height constraint to match Tab 3
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
                 vertical_spacer(1)
+                
+                # Literature Comparison Badge
+                if lit_min <= simulated_yield <= lit_max:
+                    badge_text = "✅ Within Literature Range"
+                    badge_color = "#10B981"
+                elif abs(simulated_yield - (lit_min + lit_max)/2) < 0.15:
+                    badge_text = "⚠️ Acceptable Range"
+                    badge_color = "#F59E0B"
+                else:
+                    badge_text = "❌ Needs Calibration"
+                    badge_color = "#EF4444"
+                
+                st.markdown(f"""
+                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                    <span style="background: {badge_color}20; color: {badge_color}; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.875rem; font-weight: 500;">
+                        {badge_text}
+                    </span>
+                    <span style="color: #6B7280; font-size: 0.875rem;">
+                        Simulated: {simulated_yield*100:.1f}% | Expected: {lit_min*100:.0f}-{lit_max*100:.0f}%
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
 
                 # Key Metrics (3 Columns below Graph)
                 m_col1, m_col2, m_col3 = st.columns(3)

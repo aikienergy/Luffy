@@ -1,13 +1,97 @@
 import numpy as np
 """
 Purpose: Simulation engine for enzyme kinetics.
-Overview: Uses Tellurium/Roadrunner to simulate Michaelis-Menten kinetics. Calculates product yield over time given enzyme parameters and environmental conditions (Temp, pH).
+Overview: Uses Tellurium/Roadrunner to simulate Michaelis-Menten kinetics. 
+          Calculates product yield over time given enzyme parameters and environmental conditions.
+          Phase 3: Includes real biomass support with lignin inhibition model.
 """
 import tellurium as te
+from src.shared.constants import HYDROPHOBICITY_INDEX, INHIBITION_CONSTANTS
 
 class EnzymeValidator:
     def __init__(self):
         pass
+
+    # =========================================================================
+    # Phase 3: Real Biomass Support Methods
+    # =========================================================================
+    
+    def calculate_accessibility(
+        self,
+        particle_size: float,
+        crystallinity: float = 0.7,
+        severity: float = 0.0
+    ) -> float:
+        """
+        Calculates geometric accessibility factor (η_access).
+        
+        Based on particle size and crystallinity barrier.
+        Literature: Alvira et al. (2010)
+        
+        Args:
+            particle_size: Particle diameter in mm (0.1-5.0)
+            crystallinity: Crystallinity index CrI (0.5-0.9)
+            severity: Pretreatment severity (0.0=crushing, 1.0=steam explosion)
+        
+        Returns:
+            η_access: 0.01-0.99 (accessibility factor)
+        """
+        D_REF = 0.5  # Reference particle size (mm)
+        EXPONENT = 1.5  # Surface area scaling exponent
+        
+        # Surface area factor: smaller particles = higher access
+        surface_factor = 1 / (1 + (particle_size / D_REF) ** EXPONENT)
+        
+        # Crystallinity barrier: higher severity breaks crystalline structure
+        crystal_factor = 1 - crystallinity * (1 - severity)
+        
+        eta = surface_factor * crystal_factor
+        return max(0.01, min(0.99, eta))  # Numerical stability
+
+    def calculate_inhibition_factor(
+        self,
+        lignin_content: float,
+        biomass_type: str = 'grass',
+        phenol_conc: float = 0.0,
+        furfural_conc: float = 0.0,
+        ki_phenol: float = None,
+        ki_furfural: float = None
+    ) -> float:
+        """
+        Calculates lignin inhibition factor.
+        
+        Combines Langmuir adsorption model with phenolic/furfural inhibition.
+        Literature: Li & Zheng (2017), Ximenes et al. (2010)
+        
+        Args:
+            lignin_content: Lignin fraction (0.0-0.3)
+            biomass_type: 'softwood', 'hardwood', or 'grass'
+            phenol_conc: Phenolic compound concentration (mM)
+            furfural_conc: Furfural concentration (mM)
+            ki_phenol: Override Ki for phenol (default from constants)
+            ki_furfural: Override Ki for furfural (default from constants)
+        
+        Returns:
+            Inhibition factor: 0.01-0.99 (1.0 = no inhibition)
+        """
+        # Get constants
+        hydro = HYDROPHOBICITY_INDEX.get(biomass_type, 0.65)
+        k_ads = INHIBITION_CONSTANTS['k_ads']
+        ki_ph = ki_phenol if ki_phenol is not None else INHIBITION_CONSTANTS['ki_phenol']
+        ki_fur = ki_furfural if ki_furfural is not None else INHIBITION_CONSTANTS['ki_furfural']
+        
+        # Langmuir adsorption: α_ads = (L × H) / (K_ads + L × H)
+        alpha_ads = (lignin_content * hydro) / (k_ads + lignin_content * hydro)
+        
+        # Phenolic inhibition (non-competitive)
+        phenol_factor = 1 / (1 + phenol_conc / ki_ph) if ki_ph > 0 else 1.0
+        
+        # Furfural inhibition (from hemicellulose degradation)
+        furfural_factor = 1 / (1 + furfural_conc / ki_fur) if ki_fur > 0 else 1.0
+        
+        # Combined factor
+        factor = (1 - alpha_ads) * phenol_factor * furfural_factor
+        return max(0.01, min(0.99, factor))
 
     def check_structure_validity(self, embedding_vector):
         """
@@ -40,16 +124,38 @@ class EnzymeValidator:
                                duration=24, steps=100, 
                                temp=50.0, ph=5.0, 
                                ki=10.0, # Product Inhibition Constant (e.g. 10 g/L)
-                               t_opt=50.0, ph_opt=5.0):
+                               t_opt=50.0, ph_opt=5.0,
+                               # Phase 3: Real Biomass Parameters
+                               particle_size: float = None,
+                               crystallinity: float = 0.7,
+                               severity: float = 0.0,
+                               lignin_content: float = 0.0,
+                               biomass_type: str = 'grass',
+                               phenol_conc: float = 0.0,
+                               furfural_conc: float = 0.0):
         """
         Simulates time-course reaction with Inhibition and Environmental Factors.
         
         Model:
         v = (kcat_eff * E * S) / (Km * (1 + P/Ki) + S)
+        
+        Phase 3 Extension:
+        kcat_eff *= η_access × inhibition_factor
         """
         
-        # Calculate Effective parameters
+        # Calculate Effective kcat (Temperature + pH)
         kcat_eff = self.calculate_effective_kcat(kcat, temp, ph, t_opt, ph_opt)
+        
+        # Phase 3: Apply accessibility and inhibition factors
+        if particle_size is not None:
+            eta_access = self.calculate_accessibility(particle_size, crystallinity, severity)
+            kcat_eff *= eta_access
+        
+        if lignin_content > 0:
+            inh_factor = self.calculate_inhibition_factor(
+                lignin_content, biomass_type, phenol_conc, furfural_conc
+            )
+            kcat_eff *= inh_factor
         
         # Antimony Model Definition
         antimony_model = f"""
