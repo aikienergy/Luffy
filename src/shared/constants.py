@@ -64,7 +64,7 @@ BIOMASS_PRESETS = {
 }
 
 # Pretreatment severity mapping to Combined Severity Factor (CSF)
-# Now includes rice straw specific literature data
+# Now includes rice straw specific literature data with enzyme information
 PRETREATMENT_PRESETS = {
     'simple_crushing': {
         'name': 'Simple Crushing',
@@ -74,7 +74,10 @@ PRETREATMENT_PRESETS = {
         'rice_straw_literature': {
             'yield': (0.30, 0.40),
             'time_h': 72,
-            'source': 'MDPI (2023) - Untreated rice straw hydrolysis'
+            'source': 'MDPI (2023)',
+            'enzyme': 'Cellic CTec2',
+            'eg_bg_ratio': '70:30',
+            'fpu': 10
         }
     },
     'dilute_acid': {
@@ -85,7 +88,10 @@ PRETREATMENT_PRESETS = {
         'rice_straw_literature': {
             'yield': (0.28, 0.36),
             'time_h': 72,
-            'source': 'RSC Advances (2019) - Dilute acid pretreatment optimization'
+            'source': 'RSC Advances (2019)',
+            'enzyme': 'Accellerase 1500',
+            'eg_bg_ratio': '65:35',
+            'fpu': 40
         }
     },
     'mild_hydrothermal': {
@@ -96,7 +102,10 @@ PRETREATMENT_PRESETS = {
         'rice_straw_literature': {
             'yield': (0.50, 0.70),
             'time_h': 48,
-            'source': 'NIH/PubMed (2020) - Hydrothermal pretreatment of rice straw'
+            'source': 'NIH/PubMed (2020)',
+            'enzyme': 'Cellic CTec2 + NS22118',
+            'eg_bg_ratio': '60:40',
+            'fpu': 20
         }
     },
     'steam_explosion': {
@@ -107,7 +116,10 @@ PRETREATMENT_PRESETS = {
         'rice_straw_literature': {
             'yield': (0.80, 1.00),
             'time_h': 72,
-            'source': 'NIH/PubMed (2018) - Steam explosion at 210°C'
+            'source': 'NIH/PubMed (2018)',
+            'enzyme': 'Celluclast 1.5L + Novozyme 188',
+            'eg_bg_ratio': '80:20',
+            'fpu': 20
         }
     }
 }

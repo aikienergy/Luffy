@@ -320,11 +320,17 @@ if page == "vHTS Screening":
                     lit_min, lit_max = rice_lit['yield']
                     lit_time_h = rice_lit['time_h']
                     lit_source = rice_lit['source']
+                    lit_enzyme = rice_lit.get('enzyme', '')
+                    lit_ratio = rice_lit.get('eg_bg_ratio', '')
+                    lit_fpu = rice_lit.get('fpu', '')
                 else:
                     # Fallback to biomass preset defaults
                     lit_min, lit_max = preset.get('literature_yield', (0.2, 0.4))
                     lit_time_h = preset.get('literature_time_h', 72)
                     lit_source = preset.get('literature_source', 'Literature')
+                    lit_enzyme = ''
+                    lit_ratio = ''
+                    lit_fpu = ''
                 
                 df_sim = pd.DataFrame({"Time (h)": t/3600, "Glucose (mM)": G})
                 fig = px.line(df_sim, x="Time (h)", y="Glucose (mM)", 
@@ -343,20 +349,37 @@ if page == "vHTS Screening":
                     fillcolor="green", opacity=0.2,
                     line=dict(color="green", width=1)
                 )
-                # Add annotation
+                # Add annotation - title
                 fig.add_annotation(
                     x=lit_time_h, y=lit_glucose_max,
                     text=f"Literature @{lit_time_h}h",
                     showarrow=False, yshift=10,
                     font=dict(size=10, color="#374151")
                 )
-                # Add source as second annotation below
-                fig.add_annotation(
-                    x=lit_time_h, y=lit_glucose_min,
-                    text=f"{lit_source}",
-                    showarrow=False, yshift=-15,
-                    font=dict(size=8, color="#6B7280")
-                )
+                # Add enzyme info annotation (if available)
+                if lit_enzyme:
+                    enzyme_info = f"{lit_enzyme} | EG:BG={lit_ratio} | {lit_fpu}FPU"
+                    fig.add_annotation(
+                        x=lit_time_h, y=lit_glucose_min,
+                        text=enzyme_info,
+                        showarrow=False, yshift=-15,
+                        font=dict(size=8, color="#6B7280")
+                    )
+                    # Source on third line
+                    fig.add_annotation(
+                        x=lit_time_h, y=lit_glucose_min,
+                        text=f"{lit_source}",
+                        showarrow=False, yshift=-28,
+                        font=dict(size=7, color="#9CA3AF")
+                    )
+                else:
+                    # Just source
+                    fig.add_annotation(
+                        x=lit_time_h, y=lit_glucose_min,
+                        text=f"{lit_source}",
+                        showarrow=False, yshift=-15,
+                        font=dict(size=8, color="#6B7280")
+                    )
                 
                 fig.update_layout(
                     margin=dict(l=0, r=0, t=30, b=0),
