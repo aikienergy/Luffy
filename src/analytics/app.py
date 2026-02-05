@@ -276,7 +276,15 @@ if page == "vHTS Screening":
                 t, S, C2, G = validator.run_multienzyme_simulation(
                    p_eg, p_bg, substrate_conc_init=conc_mM,
                    conc_EG=total_enz_mM*r_eg, conc_BG=total_enz_mM*(1.0-r_eg),
-                   duration=48*3600, temp=50.0, ph=5.0
+                   duration=48*3600, temp=50.0, ph=5.0,
+                   # Phase 3: Biomass parameters (local variables)
+                   particle_size=particle_size,
+                   crystallinity=preset.get('crystallinity', 0.7),
+                   severity=severity,
+                   lignin_content=lignin,
+                   biomass_type=preset['type'],
+                   phenol_conc=0.0,
+                   furfural_conc=0.0
                 )
                 
                 # Calculate simulated yield
@@ -595,16 +603,29 @@ elif page == "Process Verification":
                            enz_conc = 0.02
                            r_eg = dt_config['wt'].get('ratio', 0.7)
                            
+                           # Phase 3: Biomass parameters (explicit defaults for Tab 3)
+                           biomass_params = {
+                               'particle_size': st.session_state.get('particle_size', 1.0),
+                               'crystallinity': st.session_state.get('biomass_preset', {}).get('crystallinity', 0.7),
+                               'severity': st.session_state.get('pretreatment_severity', 0.0),
+                               'lignin_content': st.session_state.get('lignin_content', 0.15),
+                               'biomass_type': st.session_state.get('biomass_type', 'grass'),
+                               'phenol_conc': 0.0,
+                               'furfural_conc': 0.0
+                           }
+                           
                            t_w, S_w, C2_w, G_w = validator.run_multienzyme_simulation(
                                wt_eg, wt_bg, substrate_conc_init=conc_mM, 
                                conc_EG=enz_conc*r_eg, conc_BG=enz_conc*(1.0-r_eg),
-                               duration=48*3600, steps=1000
+                               duration=48*3600, steps=1000,
+                               **biomass_params
                            )
                            
                            t_m, S_m, C2_m, G_m = validator.run_multienzyme_simulation(
                                mut_eg, wt_bg, substrate_conc_init=conc_mM, 
                                conc_EG=enz_conc*r_eg, conc_BG=enz_conc*(1.0-r_eg),
-                               duration=48*3600, steps=1000
+                               duration=48*3600, steps=1000,
+                               **biomass_params
                            )
                            
                            # Time to 80% Calculation (Benchmarked against WT Final)

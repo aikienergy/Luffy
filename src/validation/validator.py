@@ -203,11 +203,26 @@ class EnzymeValidator:
                                    substrate_conc_init=100.0, 
                                    conc_EG=0.5e-6, conc_BG=0.5e-6,
                                    duration=24, steps=100, 
-                                   temp=50.0, ph=5.0):
+                                   temp=50.0, ph=5.0,
+                                   # Phase 3: Real Biomass Parameters
+                                   particle_size: float = None,
+                                   crystallinity: float = 0.7,
+                                   severity: float = 0.0,
+                                   lignin_content: float = 0.0,
+                                   biomass_type: str = 'grass',
+                                   phenol_conc: float = 0.0,
+                                   furfural_conc: float = 0.0):
         """
         Simulates Synergistic Reaction: Cellulose (S) -> Cellobiose (C2) -> Glucose (G)
         
-        params_EG/BG: dict with {kcat, Km, Ki, t_opt, ph_opt}
+        Phase 3: Applies geometric accessibility and lignin inhibition to both enzymes.
+        
+        Args:
+            params_EG/BG: dict with {kcat, Km, Ki, t_opt, ph_opt}
+            particle_size: Particle diameter in mm (None = pure substrate)
+            lignin_content: Lignin fraction (0.0-0.3)
+            biomass_type: 'softwood', 'hardwood', or 'grass'
+            phenol_conc, furfural_conc: Inhibitor concentrations (mM)
         """
         
         # Calculate Effective kcat for both
@@ -217,6 +232,19 @@ class EnzymeValidator:
         kcat_eff_BG = self.calculate_effective_kcat(
             params_BG['kcat'], temp, ph, params_BG.get('t_opt', 50), params_BG.get('ph_opt', 5)
         )
+        
+        # Phase 3: Apply biomass factors to both enzymes
+        if particle_size is not None:
+            eta_access = self.calculate_accessibility(particle_size, crystallinity, severity)
+            kcat_eff_EG *= eta_access
+            kcat_eff_BG *= eta_access
+        
+        if lignin_content > 0:
+            inh_factor = self.calculate_inhibition_factor(
+                lignin_content, biomass_type, phenol_conc, furfural_conc
+            )
+            kcat_eff_EG *= inh_factor
+            kcat_eff_BG *= inh_factor
         
         model = f"""
         model MultiEnzymeSynergy
