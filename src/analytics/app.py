@@ -321,8 +321,8 @@ if page == "vHTS Screening":
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
                     font=dict(family='Inter, sans-serif', color='#374151'),
-                    xaxis=dict(showgrid=False, linecolor='#9CA3AF', tickfont=dict(color='#374151')),
-                    yaxis=dict(showgrid=True, gridcolor='#E5E7EB', tickfont=dict(color='#374151')),
+                    xaxis=dict(showgrid=False, linecolor='#9CA3AF', tickfont=dict(color='#374151'), title_font=dict(color='#374151')),
+                    yaxis=dict(showgrid=True, gridcolor='#E5E7EB', tickfont=dict(color='#374151'), title_font=dict(color='#374151')),
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -723,8 +723,8 @@ elif page == "Process Verification":
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
                         font=dict(family='Inter, sans-serif', color='#374151'),
-                        xaxis=dict(showgrid=False, linecolor='#9CA3AF', tickfont=dict(color='#374151')),
-                        yaxis=dict(showgrid=True, gridcolor='#E5E7EB', tickfont=dict(color='#374151')),
+                        xaxis=dict(showgrid=False, linecolor='#9CA3AF', tickfont=dict(color='#374151'), title_font=dict(color='#374151')),
+                        yaxis=dict(showgrid=True, gridcolor='#E5E7EB', tickfont=dict(color='#374151'), title_font=dict(color='#374151')),
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                      )
                      
