@@ -320,9 +320,9 @@ if page == "vHTS Screening":
                     margin=dict(l=0, r=0, t=30, b=0),
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(family='Inter, sans-serif'),
-                    xaxis=dict(showgrid=False, linecolor='#E5E7EB'),
-                    yaxis=dict(showgrid=True, gridcolor='#F3F4F6'),
+                    font=dict(family='Inter, sans-serif', color='#374151'),
+                    xaxis=dict(showgrid=False, linecolor='#9CA3AF', tickfont=dict(color='#374151')),
+                    yaxis=dict(showgrid=True, gridcolor='#E5E7EB', tickfont=dict(color='#374151')),
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -531,7 +531,7 @@ elif page == "Inverse Design":
                               margin=dict(l=20, r=20, t=20, b=20),
                               paper_bgcolor='rgba(0,0,0,0)',
                               plot_bgcolor='rgba(0,0,0,0)',
-                              font=dict(family='Inter, sans-serif'),
+                              font=dict(family='Inter, sans-serif', color='#374151'),
                               legend=dict(orientation="h", y=-0.1)
                             )
                             st.plotly_chart(fig, use_container_width=True)
@@ -722,9 +722,9 @@ elif page == "Process Verification":
                         margin=dict(l=0, r=0, t=30, b=0),
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
-                        font=dict(family='Inter, sans-serif'),
-                        xaxis=dict(showgrid=False, linecolor='#E5E7EB'),
-                        yaxis=dict(showgrid=True, gridcolor='#F3F4F6'),
+                        font=dict(family='Inter, sans-serif', color='#374151'),
+                        xaxis=dict(showgrid=False, linecolor='#9CA3AF', tickfont=dict(color='#374151')),
+                        yaxis=dict(showgrid=True, gridcolor='#E5E7EB', tickfont=dict(color='#374151')),
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                      )
                      
