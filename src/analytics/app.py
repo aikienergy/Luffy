@@ -301,9 +301,9 @@ if page == "vHTS Screening":
                 lit_min, lit_max = preset.get('literature_yield', (0.2, 0.4))
                 lit_source = preset.get('literature_source', 'Literature')
                 
-                df_sim = pd.DataFrame({"Time": t/3600, "Glucose": G})
-                fig = px.line(df_sim, x="Time", y="Glucose", 
-                              title=f"Reaction Kinetics (48h)",
+                df_sim = pd.DataFrame({"Time (h)": t/3600, "Glucose (mM)": G})
+                fig = px.line(df_sim, x="Time (h)", y="Glucose (mM)", 
+                              title=f"Reaction Kinetics",
                               color_discrete_sequence=["#10B981"])
                 
                 # Add literature expected range as shaded area
