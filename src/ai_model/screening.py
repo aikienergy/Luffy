@@ -12,12 +12,32 @@ class SmartSampler:
     
     def __init__(self, df_kinetics):
         self.df = df_kinetics
-        self.eg_list = self.df[self.df['id'].str.contains("EG") | self.df['id'].str.contains("Cellulase")]
-        self.bg_list = self.df[self.df['id'].str.contains("BG") | self.df['id'].str.contains("Glucosidase")]
         
-        # Fallback if empty (e.g. for testing)
-        if self.eg_list.empty: self.eg_list = self.df.head(len(self.df)//2)
-        if self.bg_list.empty: self.bg_list = self.df.tail(len(self.df)//2)
+        # Phase 2 Fix: Use 'specificity' column for accurate classification
+        # instead of unreliable ID string matching
+        if 'specificity' in self.df.columns:
+            self.eg_list = self.df[self.df['specificity'] == 'Cellulase']
+            self.bg_list = self.df[self.df['specificity'] == 'Beta-glucosidase']
+            self.cbh_list = self.df[self.df['specificity'] == 'Cellobiohydrolase']
+        else:
+            # Legacy fallback for old datasets
+            self.eg_list = self.df[self.df['id'].str.contains("EG", na=False) | 
+                                   self.df['id'].str.contains("Cellulase", na=False)]
+            self.bg_list = self.df[self.df['id'].str.contains("BG", na=False) | 
+                                   self.df['id'].str.contains("Glucosidase", na=False)]
+            self.cbh_list = pd.DataFrame()
+        
+        # Fallback with WARNING if empty (prevents silent misuse)
+        if self.eg_list.empty: 
+            print("[WARNING] EG list empty - using mock EG data")
+            self.eg_list = self.df.head(min(10, len(self.df)))
+        if self.bg_list.empty: 
+            print("[WARNING] BG list empty - using default BG parameters")
+            # Use default BG parameters instead of misusing EG data
+            self.bg_list = pd.DataFrame([{
+                'id': 'DEFAULT_BG', 'kcat': 66.7, 'Km': 1.11, 'Ki': 2.22,
+                't_opt': 50.0, 'ph_opt': 5.0, 'sequence': '', 'organism': 'Default'
+            }])
         
         # Initialize AI for Scoring
         self.de = DesignEngine()

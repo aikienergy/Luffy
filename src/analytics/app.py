@@ -754,6 +754,11 @@ elif page == "Process Verification":
                       new_entry['organism'] = 'AI_Engineered'
                       new_entry['updated_at'] = pd.Timestamp.now().isoformat()
                       new_entry['sequence'] = dt_config['mutant'].get('mutant_sequence', '')
+                      
+                      # Add substrate based on specificity for proper filtering
+                      specificity = new_entry.get('specificity', 'Cellulase')
+                      new_entry['substrate'] = 'cellobiose' if specificity == 'Beta-glucosidase' else 'cellulose'
+                      
                       if 'Unnamed: 0' in new_entry: del new_entry['Unnamed: 0']
                       
                       st.session_state['generated_enzymes'].append(new_entry)

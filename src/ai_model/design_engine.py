@@ -13,7 +13,7 @@ from transformers import EsmTokenizer, EsmModel
 
 # Add src to path to import data_engineering
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
-from data_engineering.populate_kinetics import generate_ground_truth
+from data_engineering.enrich_kinetics import generate_ground_truth
 
 class DesignEngine:
     def __init__(self, custom_dataframe=None):
@@ -79,10 +79,10 @@ class DesignEngine:
         """
         Calculates biophysical properties for visualization.
         Returns:
-            dict: {Hydrophobicity (1-5), Charge (1-5), Stability (1-5)}
+            dict: {Hydrophobicity (1-5), Charge (1-5), Stability (1-5), Solubility (1-5), pI (1-5)}
                   Normalized to 1-5 scale for Radar Chart.
         """
-        if not sequence: return {'Hydrophobicity': 3, 'Charge': 3, 'Stability': 3}
+        if not sequence: return {'Hydrophobicity': 3, 'Charge': 3, 'Stability': 3, 'Solubility': 3, 'pI': 3}
         
         # 1. Kyte-Doolittle Hydrophobicity
         kd = {
@@ -109,10 +109,44 @@ class DesignEngine:
         stability_ratio = aliphatic / (flexible + 1)
         stab_score = min(5, max(1, stability_ratio * 3))
         
+        # 4. Solubility (based on hydrophilic residues ratio)
+        # Hydrophilic: D, E, K, R, N, Q, S, T
+        hydrophilic = sum(sequence.count(aa) for aa in ['D','E','K','R','N','Q','S','T'])
+        sol_ratio = hydrophilic / len(sequence)
+        # Typical range 0.3-0.5 for soluble proteins -> Map to 1-5
+        sol_score = min(5, max(1, sol_ratio * 10))
+        
+        # 5. Isoelectric Point (pI) estimation
+        # Using simplified Henderson-Hasselbalch based calculation
+        pK = {'D': 3.9, 'E': 4.1, 'H': 6.0, 'C': 8.3, 'Y': 10.1, 'K': 10.5, 'R': 12.5}
+        n_term_pK = 9.0
+        c_term_pK = 2.1
+        
+        # Count charged residues
+        n_d = sequence.count('D')
+        n_e = sequence.count('E')
+        n_h = sequence.count('H')
+        n_k = sequence.count('K')
+        n_r = sequence.count('R')
+        n_c = sequence.count('C')
+        n_y = sequence.count('Y')
+        
+        # Estimate pI by finding pH where net charge = 0 (simplified)
+        # pI ≈ (sum of pKa of acidic) + (sum of pKa of basic)) / (number of charged residues)
+        acidic_sum = n_d * 3.9 + n_e * 4.1 + c_term_pK
+        basic_sum = n_k * 10.5 + n_r * 12.5 + n_h * 6.0 + n_term_pK
+        total_charged = n_d + n_e + n_k + n_r + n_h + 2  # +2 for termini
+        pI_est = (acidic_sum + basic_sum) / total_charged if total_charged > 0 else 7.0
+        
+        # pI typically 4-10, map to 1-5 (neutral ~7 = 3)
+        pI_score = min(5, max(1, 1 + (pI_est - 4) * (4 / 6)))
+        
         return {
             'Hydrophobicity': round(hydro_score, 1),
             'Charge': round(charge_score, 1),
-            'Stability': round(stab_score, 1)
+            'Stability': round(stab_score, 1),
+            'Solubility': round(sol_score, 1),
+            'pI': round(pI_score, 1)
         }
 
     def recommend_best_enzyme(self, temp, ph, substrate="Cellulose"):
