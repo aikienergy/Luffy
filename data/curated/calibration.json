@@ -1,0 +1,16 @@
+{
+  "alpha_accessibility": 3.7953125,
+  "target_conversion": 0.8,
+  "achieved_conversion": 0.7908,
+  "relative_error": 0.0115,
+  "status": "PASS",
+  "reference_enzymes": {
+    "EG": "GUN2_THEFU",
+    "CBH": "GUX1_TRIRF",
+    "BG": "BGL1_ASPNG"
+  },
+  "benchmark_doi": "10.1186/s13068-024-02485-6",
+  "substrate_g_per_L": 50.0,
+  "loading_mg_per_g": 15.0,
+  "duration_h": 72.0
+}

@@ -144,6 +144,29 @@ div.stSlider>div[data-baseweb="slider"]>div>div>div {
     color: #EF4444;
 }
 
+/* provenance badges (literature vs estimated source) */
+.badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    vertical-align: middle;
+}
+
+.badge-literature {
+    background-color: #ECFDF5;
+    color: #047857;
+    border: 1px solid #10B981;
+}
+
+.badge-synthetic {
+    background-color: #F3F4F6;
+    color: #6B7280;
+    border: 1px solid #D1D5DB;
+}
+
 /* layout spacers */
 .spacer-vertical {
     width: 100%;
