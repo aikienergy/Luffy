@@ -124,9 +124,20 @@ def save_accessibility_alpha(alpha, metadata=None):
 # range for its class and substrate type. Enforced by tests/test_plausibility.py.
 # (kcat in 1/s, Km in mM where defined.)
 # --------------------------------------------------------------------------
+# Bands are anchored to the full-text-verified values now in
+# data/curated/literature_kinetics.csv (see data/curated/PROVENANCE.md):
+#   BG  on cellobiose : kcat 31.6-80.3 1/s (A. niger/T. reesei/A. fumigatus),
+#                       Km 0.88-22.3 mM (incl. high-Km T. maritima BglA).
+#   CBH on crystalline cellulose : steady-state kcat ~0.02 1/s, apparent Km a few g/L
+#                       (T. reesei & R. emersonii Cel7A; Sorensen 2015).
+#   EG  : kcat 6-1721 1/s spanning crystalline (slow) to soluble lichenin/CMC (fast);
+#         apparent Km up to ~157 mM glucose-equiv on CMC (AcCel12B).
+# Earlier (pre-full-text) bands assumed inflated, misattributed BG kcat (~2589 1/s);
+# they are widened here to bound the real measured ranges while still catching
+# gross transcription errors (values off by >~1 order of magnitude).
 PLAUSIBILITY_BANDS = {
-    # class : {"kcat": (lo, hi), "Km": (lo, hi)}
-    "BG":  {"kcat": (1e2, 1e4), "Km": (0.05, 10.0)},     # on cellobiose (soluble)
-    "CBH": {"kcat": (5e-3, 5.0), "Km": (0.1, 60.0)},     # on cellulose; Km apparent
-    "EG":  {"kcat": (1e-2, 1e2), "Km": (0.1, 60.0)},     # broad (soluble + insoluble)
+    # class : {"kcat": (lo, hi), "Km": (lo, hi)}   (kcat 1/s; Km mM where defined)
+    "BG":  {"kcat": (1e1, 1e4), "Km": (0.05, 30.0)},    # on cellobiose (soluble)
+    "CBH": {"kcat": (5e-3, 5.0), "Km": (0.1, 60.0)},    # on cellulose; Km apparent
+    "EG":  {"kcat": (1e-2, 1e4), "Km": (0.1, 200.0)},   # soluble + insoluble; apparent Km
 }

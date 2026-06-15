@@ -598,18 +598,24 @@ pH_opt = 4.0 + 4.0 × structure_hash  # 範囲: 4.0～8.0
 
 文献実測値は `data/curated/literature_kinetics.csv` に集約し、出典(DOI/PMID)・基質・測定条件・検証状況を併記。アプリ内の「Provenance & Citations」パネルでも表示され、利用者が原典(DOIリンク)で確認できる。逐語引用は `data/curated/PROVENANCE.md`。
 
-| 酵素ID | クラス | 由来 | 報告値（論文記載） | 基質 | 出典(DOI/PMID) |
+| 酵素ID | クラス | 由来 | 報告値（論文記載・全文逐語照合済み） | 基質 | 出典(DOI/PMID/PMCID) |
 |:---|:---|:---|:---|:---|:---|
-| GUN2_THEFU | EG | *Thermobifida fusca* | 比活性 48.7 IU/mg, Km 5.1 mg/mL | CMC | PMID 23631559 |
-| GUX1_HYPJE | CBH | *T. reesei* Cel7A | kcat ≈0.02 s⁻¹, Km ≈3–5 g/L | Avicel | doi:10.1074/jbc.M111.269134 |
-| BGL1_ASPNG | BG | *Aspergillus niger* | kcat 2589 s⁻¹, Km 0.24 mM | cellobiose | doi:10.1186/1754-6834-3-3 (PMID 20181208) |
-| BGL_ASPFU | BG | *Aspergillus fumigatus* | kcat 4135 s⁻¹, Km 0.26 mM | cellobiose | doi:10.1186/1754-6834-3-3 |
+| GUN2_THEFU | EG | *Thermobifida fusca* Cel5A | 比活性 48.7 IU/mg, Km 5.1 mg/mL | CMC | doi:10.1002/bab.1097 (PMID 23631559) |
+| CELD_PIRFI | EG | *Piromyces finnis* CelD | kcat 6.0 s⁻¹, Km 7.6 g/L | CMC | doi:10.1007/s00253-023-12684-0 (PMC10485095) |
+| NFEG12A_ASPFI | EG | *Aspergillus fischeri* NfEG12A (GH12) | kcat 1721 s⁻¹, Km 6.54 mg/mL | CMC-Na | doi:10.1128/AEM.03123-16 (PMC5335522) |
+| ACEL12B_ACICE | EG | *Acidothermus cellulolyticus* AcCel12B | Vmax 131.75 U/mg (→kcat≈84 s⁻¹), Km 25.47 mg/mL | CMC | doi:10.3390/ijms161025080 (PMC4632791) |
+| GUX1_TRIRF | CBH | *T. reesei* Cel7A | kcat 0.024 s⁻¹ (定常状態), Km 2.8 g/L | Avicel | doi:10.1074/jbc.M115.658930 (PMC4571970) |
+| CBH1_RASEM | CBH | *R. emersonii* Cel7A | kcat 0.022 s⁻¹ (定常状態), Km 4.9 g/L | Avicel | doi:10.1074/jbc.M115.658930 (PMC4571970) |
+| BGL1_ASPNG | BG | *Aspergillus niger* BGL (SP188) | kcat 1897 min⁻¹ (=31.6 s⁻¹), Km 0.88 mM, Ki(glc) 3.40 mM | cellobiose | doi:10.1186/1754-6834-3-3 (PMC2847552) |
+| BGL1_TRIRF | BG | *T. reesei* BGL1/Cel3A | kcat 2445 min⁻¹ (=40.8 s⁻¹), Km 1.36 mM | cellobiose | doi:10.1186/1754-6834-3-3 (PMC2847552) |
+| BGLA_ASPFU | BG | *Aspergillus fumigatus* Bgl3 | kcat 80.3 s⁻¹, Km 1.75 mM | cellobiose | doi:10.1186/1475-2859-11-25 (PMC3312866) |
+| BGLA_THEMA | BG | *Thermotoga maritima* BglA (GH1) | kcat 55.6 s⁻¹, Km 22.3 mM | cellobiose | doi:10.1007/s00253-024-13183-6 (PMC11136819) |
 
-> **注**: kcat(1/s)・Km(mM) は可溶性基質でのみモル定義可能。不溶性セルロース上の値は見かけ定数として扱い `units.py` でシミュレータ単位へ換算。CBH/BG は元データ(oed_100, 全てEC 3.2.1.4)に存在しないため新規追加。結晶性セルロース上の実 CBH は kcat≈0.02 s⁻¹ で、旧アンカー(0.5〜2.5)は不溶性基質で過大であった（基質依存性の無視を修正）。値は各論文の報告値を検索で確認済み（`verification_status: search-sourced`）、全文逐語照合はネットワーク許可セッションで確定。
+> **注**: kcat(1/s)・Km(mM) は可溶性基質でのみモル定義可能。不溶性セルロース上の値は見かけ定数として扱い `units.py` でシミュレータ単位へ換算。CBH/BG は元データ(oed_100, 全てEC 3.2.1.4)に存在しないため新規追加。結晶性セルロース上の実 CBH は定常状態 kcat≈0.02 s⁻¹ で、旧アンカー(0.5〜2.5)は不溶性基質で過大であった（基質依存性の無視を修正）。全10種はネットワーク許可セッションで**各論文の全文（PMC公開全文・表/本文）を逐語照合して確定**（`verification_status: full-text confirmed`）。この照合で旧パスの誤帰属（BG の kcat 2589/4135 s⁻¹ は当該論文に存在せず実値は 31.6/40.8 s⁻¹、CBH の DOI は無関係な論文を指していた等）を修正済み。各値の逐語引用は `data/curated/PROVENANCE.md`。
 
 **100種の内訳**:
 
-- 文献実測（`source_type = "Literature"`）: 上記4種で EG/CBH/BG を網羅。クラスは EC番号/注釈から決定論的に割当（ランダム割当を廃止）。
+- 文献実測（`source_type = "Literature"`）: 上記10種で EG(4)/CBH(2)/BG(4) を網羅。クラスは EC番号/注釈から決定論的に割当（ランダム割当を廃止）。
 - 推定（`source_type = "Estimated"`）: 残りは配列ベースのヒューリスティック（`Biophysical_Model_v2`）。アプリ上で「Estimated」バッジで実測と明確に区別。
 
 ---
@@ -936,13 +942,14 @@ LUFFYは現在、以下のことができます：
 
 LUFFYの学習データは、文献実測値（一次文献・DOI付き）と配列ベース推定値を明確に区別します。文献アンカーは EG/CBH/BG の各クラスを網羅（下表）、残りは推定値（`Estimated`）：
 
-| 酵素ID | クラス | 由来 | 報告値 | 出典 |
+| 酵素ID | クラス | 由来 | 報告値（全文逐語照合済み） | 出典 |
 |:---|:---|:---|:---|:---|
-| GUN2_THEFU | EG | *Thermobifida fusca* | 48.7 IU/mg, Km 5.1 mg/mL (CMC) | PMID 23631559 |
-| GUX1_HYPJE | CBH | *T. reesei* Cel7A | kcat 0.02 s⁻¹ (Avicel) | doi:10.1074/jbc.M111.269134 |
-| BGL1_ASPNG / BGL_ASPFU | BG | *Aspergillus* spp. | kcat 2589 / 4135 s⁻¹ (cellobiose) | doi:10.1186/1754-6834-3-3 |
+| GUN2_THEFU | EG | *Thermobifida fusca* Cel5A | 48.7 IU/mg, Km 5.1 mg/mL (CMC) | doi:10.1002/bab.1097 |
+| GUX1_TRIRF / CBH1_RASEM | CBH | *T. reesei* / *R. emersonii* Cel7A | kcat 0.024 / 0.022 s⁻¹ (Avicel, 定常状態) | doi:10.1074/jbc.M115.658930 |
+| BGL1_ASPNG / BGL1_TRIRF | BG | *A. niger* / *T. reesei* | kcat 31.6 / 40.8 s⁻¹ (cellobiose) | doi:10.1186/1754-6834-3-3 |
+| BGLA_ASPFU / BGLA_THEMA | BG | *A. fumigatus* / *T. maritima* | kcat 80.3 / 55.6 s⁻¹ (cellobiose) | doi:10.1186/1475-2859-11-25, doi:10.1007/s00253-024-13183-6 |
 
-残りは配列から推定した値（`Estimated`）を使用し、アプリ上で実測と区別表示します。文献値の拡充（10〜20種への増強）はネットワーク許可セッションで全文照合のうえ実施予定。
+残りは配列から推定した値（`Estimated`）を使用し、アプリ上で実測と区別表示します。文献値の拡充（**10種に増強・完了**）はネットワーク許可セッションで**全文照合のうえ確定済み**（EG4/CBH2/BG4、全 `full-text confirmed`）。新規 CBH/BG 配列の ESM 埋め込みも再生成済み。
 
 #### 目標とアプローチ
 
