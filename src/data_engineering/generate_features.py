@@ -32,7 +32,8 @@ def generate_features():
     print(f"Generating features for {len(sequences)} enzymes...")
     
     embeddings = []
-    
+    invalid_ids = []  # track genuinely invalid sequences instead of hiding them
+
     # Process in batches or single loop
     model.eval()
     
@@ -44,8 +45,10 @@ def generate_features():
     with torch.no_grad():
         for i, seq in enumerate(sequences):
             if pd.isna(seq) or len(seq) < 5:
-                # Handle invalid sequences with zero vector
-                embeddings.append(np.zeros(320)) 
+                # Genuinely invalid/missing sequence: emit a zero vector but
+                # record the id so it can be excluded from training (not hidden).
+                embeddings.append(np.zeros(320))
+                invalid_ids.append(ids[i])
                 continue
                 
             # Tokenize
@@ -76,6 +79,9 @@ def generate_features():
     # Save
     feat_df.to_csv(output_file, index=False)
     print(f"Saved ESM-2 enzyme features (dim={dim}) to {output_file}")
+    if invalid_ids:
+        print(f"WARNING: {len(invalid_ids)} sequences were invalid/missing and "
+              f"received zero embeddings (exclude from training): {invalid_ids}")
 
 if __name__ == "__main__":
     generate_features()

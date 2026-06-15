@@ -594,20 +594,23 @@ pH_opt = 4.0 + 4.0 × structure_hash  # 範囲: 4.0～8.0
 
 ---
 
-###### 文献アンカー（3種）
+###### 文献アンカー（一次文献・DOI付き）
 
-以下の酵素は文献の実測値を使用:
+文献実測値は `data/curated/literature_kinetics.csv` に集約し、出典(DOI/PMID)・基質・測定条件・検証状況を併記。アプリ内の「Provenance & Citations」パネルでも表示され、利用者が原典(DOIリンク)で確認できる。逐語引用は `data/curated/PROVENANCE.md`。
 
-| 酵素ID | 由来 | kcat (s⁻¹) | Km (mM) | T_opt (℃) | 出典 |
-|:---|:---|:---:|:---:|:---:|:---|
-| GUN1_HYPJE | *Trichoderma reesei* | 0.5 | 0.5 | 50 | CAZy Database |
-| GUN2_THEFU | *Thermobifida fusca* | 2.5 | 2.0 | 65 | BRENDA |
-| GUN25_ARATH | *Arabidopsis thaliana* | 1.0 | 5.0 | 35 | UniProt |
+| 酵素ID | クラス | 由来 | 報告値（論文記載） | 基質 | 出典(DOI/PMID) |
+|:---|:---|:---|:---|:---|:---|
+| GUN2_THEFU | EG | *Thermobifida fusca* | 比活性 48.7 IU/mg, Km 5.1 mg/mL | CMC | PMID 23631559 |
+| GUX1_HYPJE | CBH | *T. reesei* Cel7A | kcat ≈0.02 s⁻¹, Km ≈3–5 g/L | Avicel | doi:10.1074/jbc.M111.269134 |
+| BGL1_ASPNG | BG | *Aspergillus niger* | kcat 2589 s⁻¹, Km 0.24 mM | cellobiose | doi:10.1186/1754-6834-3-3 (PMID 20181208) |
+| BGL_ASPFU | BG | *Aspergillus fumigatus* | kcat 4135 s⁻¹, Km 0.26 mM | cellobiose | doi:10.1186/1754-6834-3-3 |
 
-**97種と文献3種の関連**:
+> **注**: kcat(1/s)・Km(mM) は可溶性基質でのみモル定義可能。不溶性セルロース上の値は見かけ定数として扱い `units.py` でシミュレータ単位へ換算。CBH/BG は元データ(oed_100, 全てEC 3.2.1.4)に存在しないため新規追加。結晶性セルロース上の実 CBH は kcat≈0.02 s⁻¹ で、旧アンカー(0.5〜2.5)は不溶性基質で過大であった（基質依存性の無視を修正）。値は各論文の報告値を検索で確認済み（`verification_status: search-sourced`）、全文逐語照合はネットワーク許可セッションで確定。
 
-- 97種: 配列から決定論的にパラメータを計算（`source_type = "Biophysical_Model_v1"`）
-- 3種: 文献値をそのまま使用（`source_type = "Literature (Anchor)"`)
+**100種の内訳**:
+
+- 文献実測（`source_type = "Literature"`）: 上記4種で EG/CBH/BG を網羅。クラスは EC番号/注釈から決定論的に割当（ランダム割当を廃止）。
+- 推定（`source_type = "Estimated"`）: 残りは配列ベースのヒューリスティック（`Biophysical_Model_v2`）。アプリ上で「Estimated」バッジで実測と明確に区別。
 
 ---
 
@@ -931,15 +934,15 @@ LUFFYは現在、以下のことができます：
 
 #### 現状の課題
 
-LUFFYの学習データは、100種類の酵素のうち**3種のみが文献実測値**です：
+LUFFYの学習データは、文献実測値（一次文献・DOI付き）と配列ベース推定値を明確に区別します。文献アンカーは EG/CBH/BG の各クラスを網羅（下表）、残りは推定値（`Estimated`）：
 
-| 酵素ID | 由来 | kcat (s⁻¹) | Km (mM) | 出典 |
-|:---|:---|:---:|:---:|:---|
-| GUN1_HYPJE | *Trichoderma reesei* | 0.5 | 0.5 | CAZy Database |
-| GUN2_THEFU | *Thermobifida fusca* | 2.5 | 2.0 | BRENDA |
-| GUN25_ARATH | *Arabidopsis thaliana* | 1.0 | 5.0 | UniProt |
+| 酵素ID | クラス | 由来 | 報告値 | 出典 |
+|:---|:---|:---|:---|:---|
+| GUN2_THEFU | EG | *Thermobifida fusca* | 48.7 IU/mg, Km 5.1 mg/mL (CMC) | PMID 23631559 |
+| GUX1_HYPJE | CBH | *T. reesei* Cel7A | kcat 0.02 s⁻¹ (Avicel) | doi:10.1074/jbc.M111.269134 |
+| BGL1_ASPNG / BGL_ASPFU | BG | *Aspergillus* spp. | kcat 2589 / 4135 s⁻¹ (cellobiose) | doi:10.1186/1754-6834-3-3 |
 
-残り97種は、配列から決定論的に推定した値を使用しています。
+残りは配列から推定した値（`Estimated`）を使用し、アプリ上で実測と区別表示します。文献値の拡充（10〜20種への増強）はネットワーク許可セッションで全文照合のうえ実施予定。
 
 #### 目標とアプローチ
 

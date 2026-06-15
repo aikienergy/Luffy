@@ -1,119 +1,106 @@
 """
-Purpose: Scalable Training Data Generation using Parallel Processing.
-Overview: Runs batch simulations in parallel (multi-core) to handle large grids (e.g. 7500+ simulations) efficiently.
+Purpose: Generate the yield-predictor training grid via parallel ODE simulation.
+
+Overview:
+    For each enzyme x temperature x pH x substrate, simulates cellulose
+    hydrolysis (single-enzyme productivity, with accessibility decay) and records
+    the cellulose->glucose CONVERSION (product / initial substrate), an explicit,
+    unit-correct quantity -- replacing the previous ambiguous `p_final / 100.0`.
+
+    Enzyme loading uses the unified enzyme_mM() conversion and the same loading
+    constant as the app/calibration, so the trained model and the app share one
+    physical regime. Only enzymes with ESM features are included so the training
+    merge is clean.
+
+    No network access required (tellurium only).
 """
-import pandas as pd
-import numpy as np
 import os
 import sys
-from joblib import Parallel, delayed
 import time
 
-# Add src to path to import validator
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.validation.validator import EnzymeValidator
+import pandas as pd
+from joblib import Parallel, delayed
 
-def simulate_single_condition(row, temp, ph, substrate, activity_map, enzyme_conc_gL=1e-5, duration=24*3600):
-    """
-    Worker function for a single simulation.
-    Must be standalone for pickling.
-    """
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from src import config
+from src.validation.validator import (EnzymeValidator, enzyme_mM,
+                                       cellulose_gpl_to_glucose_equiv_mM)
+
+INPUT_KINETICS = "data/processed/enzyme_kinetics.csv"
+FEATURES = "data/processed/enzyme_features.csv"
+OUTPUT_FILE = "data/processed/training_dataset.csv"
+
+# Coarse substrate-selectivity factor (cellulose-active vs not). This is an
+# acknowledged heuristic for cross-substrate activity, kept simple and labelled.
+SUBSTRATE_ACTIVITY = {
+    "Cellulase": {"Cellulose": 1.0, "Bagasse": 0.7, "Xylan": 0.1},
+    "Other":     {"Cellulose": 0.1, "Bagasse": 0.1, "Xylan": 0.1},
+}
+
+
+def simulate_single_condition(row, temp, ph, substrate):
     try:
-        # Re-instantiate validator inside worker to avoid Roadrunner pickling issues
-        # (Roadrunner objects are C++ pointers, often not pickleable)
-        val_local = EnzymeValidator()
-        
-        eid = row['id']
-        kcat_base = row['kcat']
-        Km_base = row['Km'] 
-        spec_type = row.get('specificity', 'Other')
-        ki = row['Ki']
-        t_opt = row['t_opt']
-        ph_opt = row['ph_opt']
-        
-        eff = activity_map.get(spec_type, {}).get(substrate, 0.05)
-        kcat_eff_sub = kcat_base * eff
-        
-        t, y = val_local.run_kinetic_simulation(
-            kcat=kcat_eff_sub, Km=Km_base, 
-            substrate_conc_init=100.0,
-            enzyme_conc=enzyme_conc_gL,
-            duration=duration, 
-            temp=temp, ph=ph, ki=ki,
-            t_opt=t_opt, ph_opt=ph_opt
-        )
-        
-        if y is not None:
-            p_final = y[-1, 1]
-            yield_val = p_final / 100.0
-            
-            return {
-                'id': eid,
-                'temp': temp,
-                'ph': ph,
-                'substrate': substrate,
-                'yield': round(yield_val, 4),
-                'kcat_base': kcat_base,
-                'Km_base': Km_base,
-                'enzyme_type': spec_type
-            }
-    except Exception as e:
-        # print(f"Error in {eid}: {e}")
+        val = EnzymeValidator()
+        enzyme_class = row.get("enzyme_class", "EG")
+        mw = config.ENZYME_MW_DA.get(enzyme_class, config.DEFAULT_ENZYME_MW_DA)
+        spec = row.get("specificity", "Cellulase")
+        sel = SUBSTRATE_ACTIVITY.get(spec, SUBSTRATE_ACTIVITY["Other"]).get(substrate, 0.1)
+
+        cel_g_L = config.CALIB_SUBSTRATE_G_PER_L
+        Cel0 = cellulose_gpl_to_glucose_equiv_mM(cel_g_L)
+        e_conc = enzyme_mM(config.ENZYME_LOADING_MG_PER_G_GLUCAN, cel_g_L, mw)
+
+        t, y = val.run_kinetic_simulation(
+            kcat=float(row["kcat"]) * sel, Km=float(row["Km"]),
+            substrate_conc_init=Cel0, enzyme_conc=e_conc,
+            duration=config.DEFAULT_DURATION_H * 3600.0, steps=200,
+            temp=temp, ph=ph, ki=float(row.get("Ki", config.KI_CELLOBIOSE_MM)),
+            t_opt=float(row.get("t_opt", config.DEFAULT_TEMP_C)),
+            ph_opt=float(row.get("ph_opt", config.DEFAULT_PH)))
+        if y is None:
+            return None
+        conversion = float(y[-1, 1]) / Cel0  # product / initial substrate
+        conversion = max(0.0, min(1.0, conversion))
+        return {"id": row["id"], "temp": temp, "ph": ph, "substrate": substrate,
+                "yield": round(conversion, 4),
+                "kcat_base": float(row["kcat"]), "Km_base": float(row["Km"]),
+                "enzyme_type": enzyme_class}
+    except Exception:
         return None
-    return None
+
 
 def generate_dataset_parallel():
-    input_kinetics = "data/processed/enzyme_kinetics.csv"
-    output_file = "data/processed/training_dataset.csv"
-    
-    if not os.path.exists(input_kinetics):
-        print("Error: Kinetics file not found.")
-        return
+    if not os.path.exists(INPUT_KINETICS):
+        raise FileNotFoundError("enzyme_kinetics.csv not found. Run populate_kinetics first.")
+    df_enz = pd.read_csv(INPUT_KINETICS)
 
-    df_enz = pd.read_csv(input_kinetics)
-    print(f"Loaded {len(df_enz)} enzymes.")
-    
-    # FULL GRID
-    temps = [30.0, 40.0, 50.0, 60.0, 70.0] # 5 temps
-    phs = [4.0, 5.0, 6.0, 7.0, 8.0]        # 5 pHs
-    substrates = ['Cellulose', 'Xylan', 'Bagasse'] # 3 subs
-    
-    activity_map = {
-        'Cellulase': {'Cellulose': 1.0, 'Xylan': 0.1, 'Bagasse': 0.70},
-        'Xylanase':  {'Cellulose': 0.1, 'Xylan': 1.0, 'Bagasse': 0.40},
-        'Other':     {'Cellulose': 0.05, 'Xylan': 0.05, 'Bagasse': 0.05}
-    }
-    
-    tasks = []
-    print(f"Generating tasks for {len(df_enz)} enzymes x {len(temps)} temps x {len(phs)} pHs x {len(substrates)} substrates.")
-    
-    for idx, row in df_enz.iterrows():
-        for sub in substrates:
-            for temp in temps:
-                for ph in phs:
-                    tasks.append((row, temp, ph, sub))
-                    
-    total_tasks = len(tasks)
-    print(f"Total Simulations: {total_tasks}")
-    
-    print("Starting Parallel Execution (n_jobs=-1)...")
-    start_time = time.time()
-    
-    # Execute in parallel
-    results = Parallel(n_jobs=-1, verbose=5)(
-        delayed(simulate_single_condition)(row, t, p, s, activity_map) for row, t, p, s in tasks
-    )
-    
-    # Filter None
-    valid_results = [r for r in results if r is not None]
-    
-    end_time = time.time()
-    duration = end_time - start_time
-    print(f"Completed in {duration:.1f} seconds. ({len(valid_results)} valid results out of {total_tasks})")
-    
-    df_res = pd.DataFrame(valid_results)
-    df_res.to_csv(output_file, index=False)
-    print(f"Saved dataset to {output_file}")
+    # Only enzymes with ESM features can be used for training (clean merge).
+    if os.path.exists(FEATURES):
+        feat_ids = set(pd.read_csv(FEATURES, usecols=["id"])["id"].astype(str))
+        before = len(df_enz)
+        df_enz = df_enz[df_enz["id"].astype(str).isin(feat_ids)]
+        print(f"Using {len(df_enz)}/{before} enzymes that have ESM features.")
+    else:
+        print("WARNING: enzyme_features.csv not found; using all enzymes.")
+
+    temps = [30.0, 40.0, 50.0, 60.0, 70.0]
+    phs = [4.0, 5.0, 6.0, 7.0, 8.0]
+    substrates = ["Cellulose", "Xylan", "Bagasse"]
+
+    tasks = [(row, t, p, s)
+             for _, row in df_enz.iterrows()
+             for s in substrates for t in temps for p in phs]
+    print(f"Total simulations: {len(tasks)}")
+
+    start = time.time()
+    results = Parallel(n_jobs=-1, verbose=1)(
+        delayed(simulate_single_condition)(row, t, p, s) for row, t, p, s in tasks)
+    valid = [r for r in results if r is not None]
+    print(f"Completed in {time.time() - start:.1f}s ({len(valid)}/{len(tasks)} valid).")
+
+    pd.DataFrame(valid).to_csv(OUTPUT_FILE, index=False)
+    print(f"Saved dataset to {OUTPUT_FILE}")
+
 
 if __name__ == "__main__":
     generate_dataset_parallel()

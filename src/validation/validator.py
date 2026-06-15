@@ -1,154 +1,211 @@
+"""
+Purpose: Cellulose-specific enzyme-kinetics simulation engine.
+
+Overview:
+    Uses Tellurium/Roadrunner (CVODE) to integrate kinetics of enzymatic
+    cellulose hydrolysis. Unlike a naive soluble-substrate Michaelis-Menten
+    applied to insoluble cellulose, this engine models the recognised features
+    of crystalline-cellulose saccharification:
+
+      * a three-enzyme system  EG (endoglucanase) + CBH (cellobiohydrolase)
+        attack insoluble cellulose -> cellobiose; BG (beta-glucosidase) cleaves
+        the SOLUBLE cellobiose -> glucose with classical Michaelis-Menten,
+      * a substrate-accessibility decay term  Phi(X) = exp(-alpha * X)  that
+        reproduces the steep rate retardation with conversion (restart/fractal
+        behaviour; Jeoh et al. 2017 doi:10.1002/bit.26277; Bansal et al. 2012),
+      * competitive product inhibition (cellobiose on EG/CBH, glucose on BG),
+      * correct stoichiometry: 1 cellobiose = 2 glucose units.
+
+    Units convention (see src/config.py):
+        concentration : mM   (cellulose & glucose tracked in GLUCOSE-EQUIVALENTS;
+                              cellobiose tracked in cellobiose units)
+        time          : seconds
+        kcat          : 1/s
+    Glucose-equivalent mass balance:  Cel + 2*C2 + G  ==  Cel0  (conserved).
+
+    `alpha` (accessibility decay) is the single free parameter, fitted once by
+    src/data_engineering/calibrate_model.py against a literature conversion
+    benchmark (src/config.py CALIB_TARGET_CONVERSION).
+"""
 import numpy as np
-"""
-Purpose: Simulation engine for enzyme kinetics.
-Overview: Uses Tellurium/Roadrunner to simulate Michaelis-Menten kinetics. Calculates product yield over time given enzyme parameters and environmental conditions (Temp, pH).
-"""
 import tellurium as te
+
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from src import config
+
+# Glucose anhydro-unit molar mass (g/mol) used to express cellulose mass as
+# glucose-equivalent molar concentration.
+GLUCOSE_UNIT_G_PER_MOL = 162.14
+
+
+def cellulose_gpl_to_glucose_equiv_mM(g_per_L):
+    """Convert insoluble-cellulose mass concentration (g/L) to mM glucose-equiv."""
+    return float(g_per_L) / GLUCOSE_UNIT_G_PER_MOL * 1000.0
+
+
+def enzyme_mM(loading_mg_per_g, cellulose_g_per_L, mw_da):
+    """
+    Convert a protein-mass enzyme loading to molar concentration (mM).
+
+    loading_mg_per_g : mg enzyme protein per g cellulose (glucan)
+    cellulose_g_per_L: substrate loading (g/L)
+    mw_da            : enzyme molecular weight (Da = g/mol)
+
+    Returns concentration in mM. This single function is used by the screening
+    tab, the verification tab AND the training-data generator so all three
+    share one physical regime.
+    """
+    protein_g_per_L = float(loading_mg_per_g) * float(cellulose_g_per_L) / 1000.0
+    mol_per_L = protein_g_per_L / float(mw_da)
+    return mol_per_L * 1000.0  # mM
+
 
 class EnzymeValidator:
     def __init__(self):
         pass
 
-    def check_structure_validity(self, embedding_vector):
+    def calculate_effective_kcat(self, kcat_base, temp, ph,
+                                 t_opt=config.DEFAULT_TEMP_C,
+                                 ph_opt=config.DEFAULT_PH):
         """
-        Structure Validity Check.
-        For ESM-2 embeddings, we assume the sequence was valid enough to generate an embedding.
-        In a full implementation, this would check pLDDT from ESMFold.
-        For now, we return True.
+        kcat adjusted for temperature and pH via Gaussian response curves
+        (approximation of the Arrhenius-rise / thermal-denaturation balance and
+        the bell-shaped pH-activity profile). Widths come from src/config.py.
         """
-        # Placeholder for ESMFold integration
-        # if pLDDT < 70: return False
-        return True, 90.0
-
-
-    def calculate_effective_kcat(self, kcat_base, temp, ph, t_opt=50.0, ph_opt=5.0):
-        """
-        Calculates kcat adjusted for Temperature and pH.
-        """
-        # 1. Temperature Effect (Gaussian Approximation of Arrhenius + Denaturation)
-        # Models a peak at t_opt with specific width
-        t_width = 10.0
+        t_width = config.TEMP_WIDTH_C
+        ph_width = config.PH_WIDTH
         temp_factor = np.exp(-0.5 * ((temp - t_opt) / t_width) ** 2)
-        
-        # 2. pH Effect (Bell curve)
-        ph_width = 1.5
         ph_factor = np.exp(-0.5 * ((ph - ph_opt) / ph_width) ** 2)
-        
         return kcat_base * temp_factor * ph_factor
 
-    def run_kinetic_simulation(self, kcat, Km, substrate_conc_init, enzyme_conc=1e-6, 
-                               duration=24, steps=100, 
-                               temp=50.0, ph=5.0, 
-                               ki=10.0, # Product Inhibition Constant (e.g. 10 g/L)
-                               t_opt=50.0, ph_opt=5.0):
+    # ------------------------------------------------------------------
+    # Single-enzyme productivity (used to characterise an enzyme for the
+    # yield-predictor training grid). Cellulose attack with accessibility decay.
+    # ------------------------------------------------------------------
+    def run_kinetic_simulation(self, kcat, Km, substrate_conc_init, enzyme_conc=1e-3,
+                               duration=86400, steps=200,
+                               temp=config.DEFAULT_TEMP_C, ph=config.DEFAULT_PH,
+                               ki=config.KI_CELLOBIOSE_MM,
+                               t_opt=config.DEFAULT_TEMP_C, ph_opt=config.DEFAULT_PH,
+                               alpha=None):
         """
-        Simulates time-course reaction with Inhibition and Environmental Factors.
-        
-        Model:
-        v = (kcat_eff * E * S) / (Km * (1 + P/Ki) + S)
+        Single-enzyme cellulose hydrolysis: S (insoluble, glucose-equiv) -> P.
+        Includes accessibility decay and product inhibition.
+
+        Returns (t, y) where y[:,0]=[S], y[:,1]=[P] in mM glucose-equiv.
+        Conversion is P/substrate_conc_init (computed by the caller).
         """
-        
-        # Calculate Effective parameters
+        if alpha is None:
+            alpha = config.get_accessibility_alpha()
         kcat_eff = self.calculate_effective_kcat(kcat, temp, ph, t_opt, ph_opt)
-        
-        # Antimony Model Definition
-        antimony_model = f"""
-        model EnzymeModel
-            # Species
+        S0 = float(substrate_conc_init)
+        if S0 <= 0:
+            return None, None
+
+        model = f"""
+        model SingleEnzymeCellulose
             species S, P;
-            
-            # Initial Conditions
-            S = {substrate_conc_init};
+            S = {S0};
             P = 0.0;
             E = {enzyme_conc};
-            
-            # Parameters
             kcat_eff = {kcat_eff};
             Km = {Km};
             Ki = {ki};
-            
-            # Reaction: Michaelis-Menten with Competitive Product Inhibition
-            # Rate = kcat * [E] * [S] / (Km * (1 + P/Ki) + S)
-            J0: S -> P; kcat_eff * E * S / (Km * (1 + P/Ki) + S);
+            alpha = {alpha};
+            S0 = {S0};
+            X := 1 - S/S0;
+            Phi := exp(-alpha * X);
+            J0: S -> P; kcat_eff * E * Phi * S / (Km + S) / (1 + P/Ki);
         end
         """
-        
-        # Load and Simulate
-        try:
-            r = te.loada(antimony_model)
-            result = r.simulate(0, duration, steps)
-            
-            # Extract S and P
-            # Result columns are usually ['time', '[S]', '[P]']
-            # We map them to standard return format
-            t = result['time']
-            s_conc = result['[S]']
-            p_conc = result['[P]']
-            
-            y_result = np.column_stack((s_conc, p_conc))
-            return t, y_result
-            
-        except Exception as e:
-            print(f"Simulation Error: {e}")
-            return None, None
-
-    def run_multienzyme_simulation(self, 
-                                   params_EG, params_BG,
-                                   substrate_conc_init=100.0, 
-                                   conc_EG=0.5e-6, conc_BG=0.5e-6,
-                                   duration=24, steps=100, 
-                                   temp=50.0, ph=5.0):
-        """
-        Simulates Synergistic Reaction: Cellulose (S) -> Cellobiose (C2) -> Glucose (G)
-        
-        params_EG/BG: dict with {kcat, Km, Ki, t_opt, ph_opt}
-        """
-        
-        # Calculate Effective kcat for both
-        kcat_eff_EG = self.calculate_effective_kcat(
-            params_EG['kcat'], temp, ph, params_EG.get('t_opt', 50), params_EG.get('ph_opt', 5)
-        )
-        kcat_eff_BG = self.calculate_effective_kcat(
-            params_BG['kcat'], temp, ph, params_BG.get('t_opt', 50), params_BG.get('ph_opt', 5)
-        )
-        
-        model = f"""
-        model MultiEnzymeSynergy
-            species S, C2, G;
-            
-            # Initial
-            S = {substrate_conc_init};
-            C2 = 0.0;
-            G = 0.0;
-            
-            E_EG = {conc_EG};
-            E_BG = {conc_BG};
-            
-            # Params EG
-            kcat_EG = {kcat_eff_EG};
-            Km_EG = {params_EG['Km']};
-            Ki_EG = {params_EG['Ki']}; # Inhibited by C2
-            
-            # Params BG
-            kcat_BG = {kcat_eff_BG};
-            Km_BG = {params_BG['Km']};
-            Ki_BG = {params_BG['Ki']}; # Inhibited by G
-            
-            # Rate 1: S -> C2 (EG)
-            # Competitive Inhibition by Product (C2)
-            J1: S -> C2; kcat_EG * E_EG * S / (Km_EG * (1 + C2/Ki_EG) + S);
-            
-            # Rate 2: C2 -> G (BG)
-            # Competitive Inhibition by Product (G)
-            J2: C2 -> G; kcat_BG * E_BG * C2 / (Km_BG * (1 + G/Ki_BG) + C2);
-        end
-        """
-        
         try:
             r = te.loada(model)
             result = r.simulate(0, duration, steps)
-            return result['time'], result['[S]'], result['[C2]'], result['[G]']
-        except Exception as e:
-            print(f"MultiEnzyme Error: {e}")
+            t = np.asarray(result["time"])
+            s_conc = np.asarray(result["[S]"])
+            p_conc = np.asarray(result["[P]"])
+            return t, np.column_stack((s_conc, p_conc))
+        except Exception as e:  # pragma: no cover - solver edge cases
+            print(f"Simulation Error: {e}")
+            return None, None
+
+    # ------------------------------------------------------------------
+    # Three-enzyme cellulolytic cascade (process verification & calibration).
+    # ------------------------------------------------------------------
+    def run_cellulolytic_simulation(self, params_EG, params_CBH, params_BG,
+                                    substrate_conc_init,
+                                    conc_EG, conc_CBH, conc_BG,
+                                    duration=None, steps=400,
+                                    temp=config.DEFAULT_TEMP_C, ph=config.DEFAULT_PH,
+                                    alpha=None):
+        """
+        Cellulose (Cel) --EG/CBH--> Cellobiose (C2) --BG--> Glucose (G).
+
+        params_* : dict with keys kcat, Km, Ki, t_opt, ph_opt
+                   (Km in mM glucose-equiv for EG/CBH; in mM cellobiose for BG).
+        conc_*   : enzyme concentration in mM (use enzyme_mM()).
+        Returns (t [h], Cel, C2, G) arrays in mM (glucose-equiv for Cel & G).
+        """
+        if duration is None:
+            duration = config.DEFAULT_DURATION_H * 3600.0
+        if alpha is None:
+            alpha = config.get_accessibility_alpha()
+
+        Cel0 = float(substrate_conc_init)
+        if Cel0 <= 0:
             return None, None, None, None
 
+        kcat_EG = self.calculate_effective_kcat(
+            params_EG["kcat"], temp, ph,
+            params_EG.get("t_opt", config.DEFAULT_TEMP_C),
+            params_EG.get("ph_opt", config.DEFAULT_PH))
+        kcat_CBH = self.calculate_effective_kcat(
+            params_CBH["kcat"], temp, ph,
+            params_CBH.get("t_opt", config.DEFAULT_TEMP_C),
+            params_CBH.get("ph_opt", config.DEFAULT_PH))
+        kcat_BG = self.calculate_effective_kcat(
+            params_BG["kcat"], temp, ph,
+            params_BG.get("t_opt", config.DEFAULT_TEMP_C),
+            params_BG.get("ph_opt", config.DEFAULT_PH))
+
+        ki_eg = params_EG.get("Ki", config.KI_CELLOBIOSE_MM)
+        ki_cbh = params_CBH.get("Ki", config.KI_CELLOBIOSE_MM)
+        ki_bg = params_BG.get("Ki", config.KI_GLUCOSE_MM)
+
+        model = f"""
+        model Cellulolysis
+            species Cel, C2, G;
+            Cel = {Cel0};
+            C2 = 0.0;
+            G = 0.0;
+            E_EG = {conc_EG};
+            E_CBH = {conc_CBH};
+            E_BG = {conc_BG};
+            kcat_EG = {kcat_EG};  Km_EG = {params_EG['Km']};   Ki_EG = {ki_eg};
+            kcat_CBH = {kcat_CBH}; Km_CBH = {params_CBH['Km']}; Ki_CBH = {ki_cbh};
+            kcat_BG = {kcat_BG};   Km_BG = {params_BG['Km']};   Ki_BG = {ki_bg};
+            alpha = {alpha};
+            Cel0 = {Cel0};
+            X := 1 - Cel/Cel0;
+            Phi := exp(-alpha * X);
+            # Cellulose attack -> cellobiose (1 cellobiose = 2 glucose units)
+            J_EG:  Cel -> 0.5 C2; kcat_EG  * E_EG  * Phi * Cel/(Km_EG  + Cel) / (1 + C2/Ki_EG);
+            J_CBH: Cel -> 0.5 C2; kcat_CBH * E_CBH * Phi * Cel/(Km_CBH + Cel) / (1 + C2/Ki_CBH);
+            # Soluble cellobiose -> 2 glucose (classical MM, glucose inhibition)
+            J_BG:  C2 -> 2 G;     kcat_BG  * E_BG  * C2/(Km_BG*(1 + G/Ki_BG) + C2);
+        end
+        """
+        try:
+            r = te.loada(model)
+            result = r.simulate(0, duration, steps)
+            t = np.asarray(result["time"])
+            return (t / 3600.0,
+                    np.asarray(result["[Cel]"]),
+                    np.asarray(result["[C2]"]),
+                    np.asarray(result["[G]"]))
+        except Exception as e:  # pragma: no cover
+            print(f"Cellulolytic simulation error: {e}")
+            return None, None, None, None

@@ -4,8 +4,13 @@ torch
 scikit-learn
 tellurium
 streamlit>=1.31.0
-
 plotly
 watchdog
 altair<5
 transformers
+joblib
+# dev / testing
+pytest
+# Note: for byte-reproducible model/feature artifacts, pin exact versions of
+# torch, transformers, tellurium and scikit-learn (ESM embeddings and GP fits
+# are version-sensitive). See data/curated/PROVENANCE.md.

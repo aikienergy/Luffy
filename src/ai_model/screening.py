@@ -1,128 +1,130 @@
+"""
+Purpose: Biochemically meaningful screening of cellulase cocktails.
 
-import pandas as pd
+Overview:
+    Builds enzyme cocktails for the cellulolytic cascade using the REAL
+    functional class of each enzyme (column `enzyme_class`: EG / CBH / BG),
+    not a substring match on the id. This fixes the previous bug where the
+    EG/BG pools were both empty and silently fell back to head/tail halves of
+    the same endoglucanase list (every pair was EG x EG).
+
+    A cocktail is an (EG, CBH, BG) triple scored by combined catalytic
+    efficiency, with a defensible protein-mass split between the three classes.
+"""
+import os
+import sys
+
 import numpy as np
-from src.ai_model.design_engine import DesignEngine
+import pandas as pd
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from src import config
+
 
 class SmartSampler:
-    """
-    Implements 'Biochemically Meaningful' sampling for High-Throughput Screening.
-    Avoids random selection by using heuristics like Kinetic Complementarity and Diversity.
-    Uses AI Model (DesignEngine) to predict scores.
-    """
-    
     def __init__(self, df_kinetics):
-        self.df = df_kinetics
-        self.eg_list = self.df[self.df['id'].str.contains("EG") | self.df['id'].str.contains("Cellulase")]
-        self.bg_list = self.df[self.df['id'].str.contains("BG") | self.df['id'].str.contains("Glucosidase")]
-        
-        # Fallback if empty (e.g. for testing)
-        if self.eg_list.empty: self.eg_list = self.df.head(len(self.df)//2)
-        if self.bg_list.empty: self.bg_list = self.df.tail(len(self.df)//2)
-        
-        # Initialize AI for Scoring
-        self.de = DesignEngine()
+        self.df = df_kinetics.copy()
+        if "enzyme_class" not in self.df.columns:
+            raise ValueError(
+                "df_kinetics is missing 'enzyme_class'. Re-run populate_kinetics.py "
+                "to regenerate enzyme_kinetics.csv with functional classes.")
+        self.eg_list = self.df[self.df["enzyme_class"] == "EG"]
+        self.cbh_list = self.df[self.df["enzyme_class"] == "CBH"]
+        self.bg_list = self.df[self.df["enzyme_class"] == "BG"]
 
-    def _predict_score(self, eg_id, bg_id):
-        """
-        Catalytic Efficiency (kcat/Km) based scoring.
-        kcat/Km is the comprehensive performance metric (Specificity Constant).
-        """
+        # Fail loud rather than silently inventing a cascade from a single class.
+        if self.eg_list.empty:
+            raise ValueError("No endoglucanase (EG) enzymes available for screening.")
+        if self.bg_list.empty:
+            raise ValueError(
+                "No beta-glucosidase (BG) enzymes available; the cellulose->glucose "
+                "cascade requires a BG. Add one to data/curated/literature_kinetics.csv.")
+        if self.cbh_list.empty:
+            # CBH is strongly synergistic but not strictly required; warn and
+            # fall back to the highest-kcat EG acting in the exo role.
+            print("WARNING: no cellobiohydrolase (CBH) in dataset; using top EG as CBH proxy.")
+            self.cbh_list = self.eg_list.nlargest(1, "kcat")
+
+    def _eff(self, row):
+        return float(row["kcat"]) / max(float(row["Km"]), 1e-6)
+
+    def _predict_score(self, eg, cbh, bg):
+        """Combined catalytic-efficiency score in [0,1] for an (EG,CBH,BG) cocktail."""
         try:
-            eg_row = self.df[self.df['id'] == eg_id].iloc[0]
-            bg_row = self.df[self.df['id'] == bg_id].iloc[0]
-
-            # EG: Catalytic Efficiency (kcat/Km)
-            # Avoid division by zero
-            eg_efficiency = eg_row['kcat'] / max(eg_row['Km'], 0.01)
-
-            # BG: Efficiency considering Inhibition (Ki)
-            bg_efficiency = bg_row['kcat'] / max(bg_row['Km'], 0.01)
-            bg_ki_factor = np.log1p(bg_row.get('Ki', 5.0))  # Higher Ki = Better Tolerance
-
-            # Combined Score (Log scale, EG weighted higher as rate limiting)
-            combined = np.log10(eg_efficiency + 0.1) * 0.6 + \
-                       np.log10(bg_efficiency + 0.1) * 0.25 + \
-                       bg_ki_factor * 0.15
-
-            # Normalize to 0-1 (Assumed efficiency range -1 to 3 in log10)
-            score = (combined + 1.0) / 4.0
-            return float(np.clip(score, 0.01, 0.99))
-
-        except Exception as e:
+            eg_eff = self._eff(eg)
+            cbh_eff = self._eff(cbh)
+            bg_eff = self._eff(bg)
+            bg_ki = np.log1p(float(bg.get("Ki", config.KI_GLUCOSE_MM)))
+            # Cellulose attack (EG+CBH) is rate-limiting -> weighted highest.
+            combined = (np.log10(eg_eff + 0.1) * 0.35
+                        + np.log10(cbh_eff + 0.1) * 0.35
+                        + np.log10(bg_eff + 0.1) * 0.20
+                        + bg_ki * 0.10)
+            return float(np.clip((combined + 2.0) / 6.0, 0.01, 0.99))
+        except Exception:
             return 0.5
 
-    def _optimize_ratio(self, eg_kcat, bg_kcat):
+    def _optimize_ratio(self, eg, cbh, bg):
         """
-        Heuristic to suggest optimal EG fraction (0.0 - 1.0).
-        Based on the principle that the rate-limiting step needs more enzyme.
-        Simplified approximation: Ratio ~ 1 / (1 + sqrt(k_EG / k_BG))
+        Protein-mass fractions (EG, CBH, BG). Starts from the defensible default
+        cocktail and nudges toward whichever cellulose-attacking class is slower
+        (rate-limiting needs more enzyme). Always normalised to sum 1.
         """
+        base = config.DEFAULT_COCKTAIL_FRACTIONS
+        f_eg, f_cbh, f_bg = base["EG"], base["CBH"], base["BG"]
         try:
-            # If EG is very fast (high kcat), we need less of it.
-            # If BG is slow (low kcat), we need more of it (less EG).
-            if eg_kcat <= 0 or bg_kcat <= 0: return 0.7
-            
-            # Theoretical balance point for linear pathway flux maximization
-            # Fraction EG (f_eg)
-            f_eg = 1.0 / (1.0 + np.sqrt(eg_kcat / bg_kcat))
-            
-            # Clamp to reasonable industrial bounds (20% - 90%)
-            return float(np.clip(f_eg, 0.2, 0.9))
-        except:
-            return 0.7
+            # Shift mass between EG and CBH toward the slower of the two.
+            kcat_eg = max(float(eg["kcat"]), 1e-6)
+            kcat_cbh = max(float(cbh["kcat"]), 1e-6)
+            shift = 1.0 / (1.0 + np.sqrt(kcat_eg / kcat_cbh))  # fraction of EG+CBH to EG
+            pool = f_eg + f_cbh
+            f_eg = float(np.clip(shift, 0.2, 0.8)) * pool
+            f_cbh = pool - f_eg
+        except Exception:
+            pass
+        total = f_eg + f_cbh + f_bg
+        return {"EG": round(f_eg / total, 3),
+                "CBH": round(f_cbh / total, 3),
+                "BG": round(f_bg / total, 3)}
 
     def sample_plate(self, size=96):
-        """
-        Generates a list of enzyme pairs (EG, BG) for the specified plate size.
-        """
+        """Generate up to `size` (EG,CBH,BG) cocktail candidates, ranked by score."""
         samples = []
-        
-        # Strategy 1: High Performance Pairs (Top 20%)
-        top_eg = self.eg_list.nlargest(int(len(self.eg_list)*0.2), 'kcat')
-        top_bg = self.bg_list.nlargest(int(len(self.bg_list)*0.2), 'Ki')
-        
-        # Strategy 2: Diversity
-        div_eg = self.eg_list.drop_duplicates(subset='organism').head(20)
-        
-        count = 0
-        
-        # Helper to add sample with optimization
-        def add_sample(eg, bg, reason):
-            pred_score = self._predict_score(eg['id'], bg['id'])
-            # Calc Ratio
-            opt_ratio = self._optimize_ratio(eg['kcat'], bg.get('kcat', 10.0)) # BG might not be in same DF structure if mixed? assuming consistency
-            # kcat is in the row
-            
-            return {
-                'eg_id': eg['id'],
-                'bg_id': bg['id'],
-                'reason': reason,
-                'Predicted_Score': pred_score,
-                'ratio': round(opt_ratio, 2)
-            }
-        
-        # 1. Exhaustive High Performance
+        top_eg = self.eg_list.nlargest(max(1, int(len(self.eg_list) * 0.25)), "kcat")
+        cbh_opts = self.cbh_list
+        bg_opts = self.bg_list.nlargest(len(self.bg_list), "Ki")
+
+        seen = set()
+
+        def add(eg, cbh, bg, reason):
+            key = (eg["id"], cbh["id"], bg["id"])
+            if key in seen:
+                return False
+            seen.add(key)
+            ratio = self._optimize_ratio(eg, cbh, bg)
+            samples.append({
+                "eg_id": eg["id"], "cbh_id": cbh["id"], "bg_id": bg["id"],
+                "reason": reason,
+                "Predicted_Score": self._predict_score(eg, cbh, bg),
+                "ratio_eg": ratio["EG"], "ratio_cbh": ratio["CBH"], "ratio_bg": ratio["BG"],
+            })
+            return True
+
+        # 1. High-performance combinations
         for _, eg in top_eg.iterrows():
-            for _, bg in top_bg.iterrows():
-                if count >= size: break
-                samples.append(add_sample(eg, bg, 'High Performance Synergy'))
-                count += 1
-            if count >= size: break
-            
-        # 2. Diversity Fill
-        if count < size:
-            remaining = size - count
-            # Use random sampling to fill the rest
-            # Ensure we don't just stop if diversity head(20) is exhausted
-            
-            # Simple approach: Sample 'remaining' times from the full lists
-            other_eg = self.eg_list.sample(n=remaining, replace=True)
-            other_bg = self.bg_list.sample(n=remaining, replace=True)
-            
-            for (i, eg), (j, bg) in zip(other_eg.iterrows(), other_bg.iterrows()):
-                samples.append(add_sample(eg, bg, 'Exploration (Random/Diversity)'))
-                count += 1
-                
-        # Sort by Score
-        samples = sorted(samples, key=lambda x: x['Predicted_Score'], reverse=True)
+            for _, cbh in cbh_opts.iterrows():
+                for _, bg in bg_opts.iterrows():
+                    if len(samples) >= size:
+                        break
+                    add(eg, cbh, bg, "High Performance Synergy")
+        # 2. Diversity fill (sample with replacement across full pools)
+        guard = 0
+        while len(samples) < size and guard < size * 20:
+            guard += 1
+            eg = self.eg_list.sample(1).iloc[0]
+            cbh = self.cbh_list.sample(1).iloc[0]
+            bg = self.bg_list.sample(1).iloc[0]
+            add(eg, cbh, bg, "Exploration (Diversity)")
+
+        samples.sort(key=lambda x: x["Predicted_Score"], reverse=True)
         return samples[:size]
