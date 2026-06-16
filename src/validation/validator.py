@@ -67,6 +67,50 @@ class EnzymeValidator:
     def __init__(self):
         pass
 
+    # ------------------------------------------------------------------
+    # Real-biomass substrate-property factors (lignin inhibition + geometric
+    # accessibility). These multiply the cellulose-attack rate; they default to
+    # a neutral 1.0 so calibration/training (which pass no biomass) are unchanged.
+    # ------------------------------------------------------------------
+    def calculate_accessibility(self, particle_size, crystallinity=0.7, severity=0.0):
+        """Geometric accessibility factor in [0.01, 0.99]. Smaller particles and
+        lower crystallinity (or harsher pretreatment, which breaks crystalline
+        structure) expose more attackable surface. Alvira et al. (2010)."""
+        D_REF, EXPONENT = 0.5, 1.5
+        surface_factor = 1.0 / (1.0 + (float(particle_size) / D_REF) ** EXPONENT)
+        crystal_factor = 1.0 - float(crystallinity) * (1.0 - float(severity))
+        return max(0.01, min(0.99, surface_factor * crystal_factor))
+
+    def calculate_inhibition_factor(self, lignin_content, biomass_type="grass",
+                                    phenol_conc=0.0, furfural_conc=0.0,
+                                    ki_phenol=None, ki_furfural=None):
+        """Lignin inhibition factor in [0.01, 0.99] (1.0 = no inhibition).
+        Langmuir non-productive adsorption to lignin + non-competitive phenol/
+        furfural inhibition. Li & Zheng (2017), Ximenes et al. (2010)."""
+        hydro = config.HYDROPHOBICITY_INDEX.get(biomass_type, 0.65)
+        k_ads = config.INHIBITION_CONSTANTS["k_ads"]
+        ki_ph = config.INHIBITION_CONSTANTS["ki_phenol"] if ki_phenol is None else ki_phenol
+        ki_fur = config.INHIBITION_CONSTANTS["ki_furfural"] if ki_furfural is None else ki_furfural
+        L = float(lignin_content)
+        denom = k_ads + L * hydro
+        alpha_ads = (L * hydro) / denom if denom > 0 else 0.0
+        phenol_factor = 1.0 / (1.0 + phenol_conc / ki_ph) if ki_ph > 0 else 1.0
+        furfural_factor = 1.0 / (1.0 + furfural_conc / ki_fur) if ki_fur > 0 else 1.0
+        return max(0.01, min(0.99, (1.0 - alpha_ads) * phenol_factor * furfural_factor))
+
+    def biomass_factor(self, lignin_content=0.0, biomass_type="grass",
+                       particle_size=None, crystallinity=0.7, severity=0.0,
+                       phenol_conc=0.0, furfural_conc=0.0):
+        """Combined substrate-property multiplier on the cellulose-attack rate.
+        Returns 1.0 when no biomass properties are supplied (neutral default)."""
+        bio = 1.0
+        if lignin_content and float(lignin_content) > 0:
+            bio *= self.calculate_inhibition_factor(lignin_content, biomass_type,
+                                                    phenol_conc, furfural_conc)
+        if particle_size is not None:
+            bio *= self.calculate_accessibility(particle_size, crystallinity, severity)
+        return bio
+
     def calculate_effective_kcat(self, kcat_base, temp, ph,
                                  t_opt=config.DEFAULT_TEMP_C,
                                  ph_opt=config.DEFAULT_PH):
@@ -90,7 +134,7 @@ class EnzymeValidator:
                                temp=config.DEFAULT_TEMP_C, ph=config.DEFAULT_PH,
                                ki=config.KI_CELLOBIOSE_MM,
                                t_opt=config.DEFAULT_TEMP_C, ph_opt=config.DEFAULT_PH,
-                               alpha=None):
+                               alpha=None, bio_factor=1.0):
         """
         Single-enzyme cellulose hydrolysis: S (insoluble, glucose-equiv) -> P.
         Includes accessibility decay and product inhibition.
@@ -115,10 +159,11 @@ class EnzymeValidator:
             Km = {Km};
             Ki = {ki};
             alpha = {alpha};
+            bio = {bio_factor};
             S0 = {S0};
             X := 1 - S/S0;
             Phi := exp(-alpha * X);
-            J0: S -> P; kcat_eff * E * Phi * S / (Km + S) / (1 + P/Ki);
+            J0: S -> P; kcat_eff * E * bio * Phi * S / (Km + S) / (1 + P/Ki);
         end
         """
         try:
@@ -140,7 +185,7 @@ class EnzymeValidator:
                                     conc_EG, conc_CBH, conc_BG,
                                     duration=None, steps=400,
                                     temp=config.DEFAULT_TEMP_C, ph=config.DEFAULT_PH,
-                                    alpha=None):
+                                    alpha=None, bio_factor=1.0):
         """
         Cellulose (Cel) --EG/CBH--> Cellobiose (C2) --BG--> Glucose (G).
 
@@ -188,12 +233,15 @@ class EnzymeValidator:
             kcat_CBH = {kcat_CBH}; Km_CBH = {params_CBH['Km']}; Ki_CBH = {ki_cbh};
             kcat_BG = {kcat_BG};   Km_BG = {params_BG['Km']};   Ki_BG = {ki_bg};
             alpha = {alpha};
+            bio = {bio_factor};
             Cel0 = {Cel0};
             X := 1 - Cel/Cel0;
             Phi := exp(-alpha * X);
-            # Cellulose attack -> cellobiose (1 cellobiose = 2 glucose units)
-            J_EG:  Cel -> 0.5 C2; kcat_EG  * E_EG  * Phi * Cel/(Km_EG  + Cel) / (1 + C2/Ki_EG);
-            J_CBH: Cel -> 0.5 C2; kcat_CBH * E_CBH * Phi * Cel/(Km_CBH + Cel) / (1 + C2/Ki_CBH);
+            # Cellulose attack -> cellobiose (1 cellobiose = 2 glucose units).
+            # `bio` = lignin-inhibition x geometric-accessibility (1.0 if no biomass given);
+            # applied to the solid-attack enzymes only (BG acts on soluble cellobiose).
+            J_EG:  Cel -> 0.5 C2; kcat_EG  * E_EG  * bio * Phi * Cel/(Km_EG  + Cel) / (1 + C2/Ki_EG);
+            J_CBH: Cel -> 0.5 C2; kcat_CBH * E_CBH * bio * Phi * Cel/(Km_CBH + Cel) / (1 + C2/Ki_CBH);
             # Soluble cellobiose -> 2 glucose (classical MM, glucose inhibition)
             J_BG:  C2 -> 2 G;     kcat_BG  * E_BG  * C2/(Km_BG*(1 + G/Ki_BG) + C2);
         end

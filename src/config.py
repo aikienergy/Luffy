@@ -141,3 +141,28 @@ PLAUSIBILITY_BANDS = {
     "CBH": {"kcat": (5e-3, 5.0), "Km": (0.1, 60.0)},    # on cellulose; Km apparent
     "EG":  {"kcat": (1e-2, 1e4), "Km": (0.1, 200.0)},   # soluble + insoluble; apparent Km
 }
+
+# --------------------------------------------------------------------------
+# Real-biomass support: lignin inhibition & geometric accessibility (Phase 3
+# integration). These parameterise the substrate-property multipliers applied
+# to the cellulose-attack rate in src/validation/validator.py. They are a
+# separate effect from the conversion-dependent accessibility decay `alpha`
+# (alpha = how the rate falls as conversion proceeds; the factors below = how
+# a given biomass/pretreatment gates the initial attackable surface).
+# --------------------------------------------------------------------------
+# Lignin hydrophobicity index by biomass type (drives non-productive cellulase
+# adsorption to lignin). Li & Zheng (2017) -- S/G ratio sets adsorption strength.
+HYDROPHOBICITY_INDEX = {
+    "softwood": 0.85,   # high syringyl content -> strong adsorption
+    "hardwood": 0.65,
+    "grass": 0.50,      # p-coumarate esters
+}
+
+# Inhibition constants. Phenol/furfural Ki: Ximenes et al. (2010); k_ads is the
+# Langmuir constant for the lignin-adsorption term.
+INHIBITION_CONSTANTS = {
+    "ki_phenol": 8.0,     # mM
+    "ki_furfural": 2.0,   # mM
+    "ki_hmf": 5.0,        # mM (hydroxymethylfurfural)
+    "k_ads": 0.15,        # Langmuir adsorption constant
+}
