@@ -28,7 +28,7 @@ from src.ai_model.screening import SmartSampler
 from src.data_engineering.dataset_manager import DatasetManager
 from src.validation.validator import (EnzymeValidator, enzyme_mM,
                                        cellulose_gpl_to_glucose_equiv_mM)
-from src.resources.materials import BIOMASS_DATA
+from src.resources.materials import BIOMASS_DATA, PRETREATMENT_PRESETS
 from src.shared.components import (load_css, stats_card, section_header,
                                    vertical_spacer, CardContainer, source_badge)
 
@@ -83,32 +83,42 @@ def enzyme_params(eid):
             'ph_opt': float(row.get('ph_opt', config.DEFAULT_PH))}
 
 
-def run_cocktail(eg_id, cbh_id, bg_id, fracs, cellulose_g_L, duration_h=None):
-    """Run the 3-enzyme cellulolytic cascade for a cocktail. Returns (t_h, Cel, C2, G, Cel0)."""
+def run_cocktail(eg_id, cbh_id, bg_id, fracs, cellulose_g_L, duration_h=None,
+                 lignin_fraction=0.0, biomass_type='grass', particle_size=None,
+                 crystallinity=0.7, severity=0.0):
+    """Run the 3-enzyme cellulolytic cascade for a cocktail. Returns (t_h, Cel, C2, G, Cel0).
+    Biomass properties (lignin / particle / crystallinity / pretreatment severity)
+    set the substrate-attack multiplier via validator.biomass_factor()."""
     validator = EnzymeValidator()
     Cel0 = cellulose_gpl_to_glucose_equiv_mM(cellulose_g_L)
     load = config.ENZYME_LOADING_MG_PER_G_GLUCAN
     e_eg = enzyme_mM(load * fracs[0], cellulose_g_L, config.ENZYME_MW_DA['EG'])
     e_cbh = enzyme_mM(load * fracs[1], cellulose_g_L, config.ENZYME_MW_DA['CBH'])
     e_bg = enzyme_mM(load * fracs[2], cellulose_g_L, config.ENZYME_MW_DA['BG'])
+    bio = validator.biomass_factor(lignin_content=lignin_fraction, biomass_type=biomass_type,
+                                   particle_size=particle_size, crystallinity=crystallinity,
+                                   severity=severity)
     dur = (duration_h or config.DEFAULT_DURATION_H) * 3600.0
     t, Cel, C2, G = validator.run_cellulolytic_simulation(
         enzyme_params(eg_id), enzyme_params(cbh_id), enzyme_params(bg_id),
         substrate_conc_init=Cel0, conc_EG=e_eg, conc_CBH=e_cbh, conc_BG=e_bg,
-        duration=dur, temp=config.DEFAULT_TEMP_C, ph=config.DEFAULT_PH)
+        duration=dur, temp=config.DEFAULT_TEMP_C, ph=config.DEFAULT_PH, bio_factor=bio)
     return t, Cel, C2, G, Cel0
 
 
-def add_literature_band(fig, cel0):
-    """Shade the literature conversion envelope (glucose mM) on a kinetics chart."""
-    lo, hi = config.LIT_RATE_BAND
+def add_literature_band(fig, cel0, band=None, label="Literature range"):
+    """Shade a literature conversion envelope (glucose mM) on a kinetics chart.
+    `band` (lo, hi fractions) overrides the default calibration band -- e.g. a
+    biomass x pretreatment yield range; falls back to config.LIT_RATE_BAND."""
+    lo, hi = band if band else config.LIT_RATE_BAND
     fig.add_hrect(y0=lo * cel0, y1=hi * cel0, line_width=0,
                   fillcolor="#10B981", opacity=0.08,
-                  annotation_text="Literature range", annotation_position="top left")
-    fig.add_hline(y=config.CALIB_TARGET_CONVERSION * cel0, line_dash="dot",
-                  line_color="#10B981", opacity=0.5,
-                  annotation_text=f"Lit. target {int(config.CALIB_TARGET_CONVERSION*100)}%",
-                  annotation_position="bottom right")
+                  annotation_text=label, annotation_position="top left")
+    if not band:
+        fig.add_hline(y=config.CALIB_TARGET_CONVERSION * cel0, line_dash="dot",
+                      line_color="#10B981", opacity=0.5,
+                      annotation_text=f"Lit. target {int(config.CALIB_TARGET_CONVERSION*100)}%",
+                      annotation_position="bottom right")
 
 
 def render_sources_panel(entries):
@@ -195,6 +205,32 @@ if page == "vHTS Screening":
             st.session_state['cellulose_g_L'] = cellulose_g_L
             st.session_state['substrate_name'] = mat_name
             stats_card("Target Cellulose", f"{conc_mM:.0f}", "mM (glucose-equiv)")
+
+            # Real-biomass: pretreatment + lignin -> hydrolysis (bio) multiplier
+            mat = BIOMASS_DATA[mat_name]
+            pre_name = st.selectbox("Pretreatment", list(PRETREATMENT_PRESETS.keys()))
+            pre = PRETREATMENT_PRESETS[pre_name]
+            lignin_pct = st.slider("Lignin (%)", 5, 30, int(mat.get('lignin_fraction', 0.2) * 100))
+            bio = EnzymeValidator().biomass_factor(
+                lignin_content=lignin_pct / 100.0, biomass_type=mat.get('biomass_type', 'grass'),
+                particle_size=mat.get('particle_size'), crystallinity=mat.get('crystallinity', 0.7),
+                severity=pre['severity'])
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                stats_card("Lignin", f"{lignin_pct}", "% dry wt")
+            with cc2:
+                stats_card("Hydrolysis factor", f"{bio:.2f}", "x attack rate")
+            st.caption(f"{pre_name}: {pre['description']}")
+            st.session_state.update({
+                'lignin_fraction': lignin_pct / 100.0,
+                'biomass_type': mat.get('biomass_type', 'grass'),
+                'particle_size': mat.get('particle_size'),
+                'crystallinity': mat.get('crystallinity', 0.7),
+                'pretreatment_name': pre_name,
+                'pretreatment_severity': pre['severity'],
+                'pretreatment_literature': pre.get('literature', {}),
+                'biomass_literature_yield': mat.get('literature_yield'),
+            })
             st.divider()
             st.markdown("**Plate Format**")
             plate_format = int(st.selectbox("Format", ["96-well", "384-well", "1536-well"],
@@ -239,11 +275,20 @@ if page == "vHTS Screening":
                 cel_g_L = st.session_state.get('cellulose_g_L', 35.0)
                 t, Cel, C2, G, Cel0 = run_cocktail(
                     best_hit['eg_id'], best_hit['cbh_id'], best_hit['bg_id'],
-                    [best_hit['ratio_eg'], best_hit['ratio_cbh'], best_hit['ratio_bg']], cel_g_L)
+                    [best_hit['ratio_eg'], best_hit['ratio_cbh'], best_hit['ratio_bg']], cel_g_L,
+                    lignin_fraction=st.session_state.get('lignin_fraction', 0.0),
+                    biomass_type=st.session_state.get('biomass_type', 'grass'),
+                    particle_size=st.session_state.get('particle_size'),
+                    crystallinity=st.session_state.get('crystallinity', 0.7),
+                    severity=st.session_state.get('pretreatment_severity', 0.0))
                 fig = px.line(pd.DataFrame({"Time (h)": t, "Glucose": G}), x="Time (h)", y="Glucose",
                               title=f"Cellulolytic Cascade ({int(config.DEFAULT_DURATION_H)}h)",
                               color_discrete_sequence=["#10B981"])
-                add_literature_band(fig, Cel0)
+                _lit = st.session_state.get('pretreatment_literature', {})
+                _band = _lit.get('yield') or st.session_state.get('biomass_literature_yield')
+                add_literature_band(fig, Cel0, band=_band,
+                                    label=(f"Lit. yield · {st.session_state.get('pretreatment_name','')}"
+                                           if _band else "Literature range"))
                 fig.update_layout(margin=dict(l=0, r=0, t=30, b=0),
                                   paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                                   font=dict(family='Inter, sans-serif'),
@@ -260,6 +305,11 @@ if page == "vHTS Screening":
                     source_badge(best_hit.get('source_type', 'Estimated'))
                 with m3:
                     stats_card("EG Affinity (Km)", f"{best_hit['Km']:.2g}", "mM")
+                if _lit:
+                    st.caption(
+                        f"📋 Reference cocktail (literature): {_lit.get('enzyme', '—')} · "
+                        f"EG:BG {_lit.get('eg_bg_ratio', '—')} · {_lit.get('fpu', '—')} FPU/g · "
+                        f"{_lit.get('time_h', '—')} h ({_lit.get('source', '')})")
             render_sources_panel([("EG", best_hit['eg_id']), ("CBH", best_hit['cbh_id']),
                                   ("BG", best_hit['bg_id'])])
             st.divider()
