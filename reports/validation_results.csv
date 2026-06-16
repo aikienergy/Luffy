@@ -1,0 +1,52 @@
+accession,organism_ai,organism_lit,specificity,kcat_AI,kcat_Lit,Km_AI,Km_Lit,lit_ref,kcat_ratio,Km_ratio,kcat_log2_fold,Km_log2_fold
+Q5AUW5,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Beta-glucosidase,4.67,72.9,1.6212,2.7,Physico-chemical properties study,0.06406035665294924,0.6004444444444444,-3.964424359504638,-0.7358973267787149
+Q5BFG8,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Beta-glucosidase,8.45,72.9,3.0067,2.7,Physico-chemical properties study,0.11591220850480108,1.1135925925925925,-3.108895568044753,0.1552215197965173
+Q5BCC6,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Beta-glucosidase,9.89,72.9,2.7699,2.7,Physico-chemical properties study,0.13566529492455418,1.0258888888888889,-2.8818763884551886,0.036874485204749355
+Q5AWI5,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Beta-glucosidase,14.15,72.9,1.8015,2.7,Physico-chemical properties study,0.19410150891632372,0.6672222222222222,-2.365116761495055,-0.583760755511403
+B9K7M5,Thermotoga neapolitana (strain ATCC 49049 / D,Thermotoga maritima,Beta-glucosidase,246.09,42.0,11.3432,0.65,Hyperthermophilic BG,5.859285714285714,17.451076923076922,2.550724801291312,4.125244164195769
+A0A024SH20,Hypocrea jecorina (strain ATCC 56765 / BCRC 3,Trichoderma reesei,Cellulase,84.11,15.0,0.2785,0.5,EG1 core cellulase,5.607333333333333,0.557,2.4873148347503564,-0.8442507673220552
+A0A024SNB7,Hypocrea jecorina (strain ATCC 56765 / BCRC 3,Trichoderma reesei,Cellulase,277.95,15.0,0.4206,0.5,EG1 core cellulase,18.529999999999998,0.8412,4.211790976252541,-0.24947924481767014
+P07981,Hypocrea jecorina (Trichoderma reesei),Trichoderma reesei,Cellulase,277.95,15.0,0.4206,0.5,EG1 core cellulase,18.529999999999998,0.8412,4.211790976252541,-0.24947924481767014
+P07982,Hypocrea jecorina (Trichoderma reesei),Trichoderma reesei,Cellulase,75.56,15.0,0.2649,0.5,EG1 core cellulase,5.037333333333334,0.5298,2.3326602010051265,-0.9164802511798271
+Q12714,Trichoderma longibrachiatum,Trichoderma reesei,Cellulase,494.33,15.0,0.4455,0.5,EG1 core cellulase,32.955333333333336,0.891,5.0424400578720565,-0.16650266314016504
+Q1HFS8,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Cellulase,7.1,45.5,1.4822,0.25,AnEG cellulase,0.15604395604395604,5.9288,-2.6799756155813768,2.5677401301945975
+Q5B6H0,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Cellulase,0.46,45.5,1.2509,0.25,AnEG cellulase,0.01010989010989011,5.0036,-6.628088873916408,2.3229664615496453
+Q5B7R2,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Cellulase,72.4,45.5,0.8917,0.25,AnEG cellulase,1.5912087912087913,3.5668,0.6701231519971469,1.834630322309462
+Q5BDU5,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Cellulase,16.22,45.5,1.946,0.25,AnEG cellulase,0.35648351648351645,7.784,-1.488092725756148,2.9605117101190244
+P07984,Cellulomonas fimi,Cellulomonas fimi,Cellulase,17.36,25.0,1.9767,0.3,Bacterial EG,0.6944,6.5889999999999995,-0.5261611471049701,2.720059526763996
+P14090,Cellulomonas fimi (strain ATCC 484 / DSM 2011,Cellulomonas fimi,Cellulase,37.87,25.0,3.7406,0.3,Bacterial EG,1.5148,12.468666666666667,0.5991273263349699,3.640235294118005
+O08342,Paenibacillus barcinonensis,Bacillus subtilis,Cellulase,28.87,30.0,3.0133,0.4,Bacterial EG,0.9623333333333334,7.53325,-0.05539139314726124,2.9132724077024608
+O85465,Salipaludibacillus agaradhaerens (Bacillus ag,Bacillus subtilis,Cellulase,94.36,30.0,0.6557,0.4,Bacterial EG,3.1453333333333333,1.6392499999999999,1.6532129178562194,0.7130358948619405
+Q5YLG1,Bacillus pumilus (Bacillus mesentericus),Bacillus subtilis,Cellulase,27.83,30.0,1.776,0.4,Bacterial EG,0.9276666666666666,4.4399999999999995,-0.10832159205163588,2.150559676575381
+P0C2S4,Acetivibrio thermocellus (Hungateiclostridium,Clostridium thermocellum,Cellulase,27.34,50.0,1.8568,0.2,Thermophilic EG,0.5468,9.283999999999999,-0.8709148519433895,3.214746522682395
+P10477,Acetivibrio thermocellus (strain ATCC 27405 /,Clostridium thermocellum,Cellulase,26.7,50.0,1.8323,0.2,Thermophilic EG,0.534,9.1615,-0.905088352974533,3.195583828168702
+P16218,Acetivibrio thermocellus (strain ATCC 27405 /,Clostridium thermocellum,Cellulase,32.33,50.0,1.7955,0.2,Thermophilic EG,0.6466,8.9775,-0.6290545874233641,3.1663137478899332
+P17901,Ruminiclostridium cellulolyticum (strain ATCC,Clostridium thermocellum,Cellulase,8.9,50.0,1.6349,0.2,Thermophilic EG,0.17800000000000002,8.1745,-2.4900508536956893,3.031130489683393
+P28621,Clostridium cellulovorans (strain ATCC 35296 ,Clostridium thermocellum,Cellulase,112.05,50.0,1.9358,0.2,Thermophilic EG,2.241,9.678999999999998,1.1641426488483064,3.2748580010571637
+P28623,Clostridium cellulovorans (strain ATCC 35296 ,Clostridium thermocellum,Cellulase,52.28,50.0,1.9249,0.2,Thermophilic EG,1.0456,9.6245,0.06433104624598394,3.266711593551276
+P37699,Ruminiclostridium cellulolyticum (strain ATCC,Clostridium thermocellum,Cellulase,33.34,50.0,0.9047,0.2,Thermophilic EG,0.6668000000000001,4.523499999999999,-0.5846739905630325,2.177439471461764
+P54937,Clostridium longisporum,Clostridium thermocellum,Cellulase,40.69,50.0,1.4435,0.2,Thermophilic EG,0.8138,7.217499999999999,-0.29725381447573895,2.851499202461257
+Q02934,Acetivibrio thermocellus (strain ATCC 27405 /,Clostridium thermocellum,Cellulase,14.62,50.0,0.9916,0.2,Thermophilic EG,0.2924,4.958,-1.7739847835970122,2.309758271424635
+P56680,Humicola insolens (Soft-rot fungus),Humicola insolens,Cellulase,43.67,38.5,1.5387,0.28,Industrial EG,1.1342857142857143,5.495357142857142,0.18178408531062906,2.458213244866145
+Q7SIG5,Humicola insolens (Soft-rot fungus),Humicola insolens,Cellulase,17.57,38.5,1.9948,0.28,Industrial EG,0.45636363636363636,7.124285714285714,-1.13174425446125,2.8327453758327854
+P46237,Fusarium oxysporum (Fusarium vascular wilt),Fusarium oxysporum,Cellulase,9.5,22.0,0.9341,0.55,Fungal EG,0.4318181818181818,1.6983636363636363,-1.2115041051937117,0.7641453871664121
+A0A024RXP8,Hypocrea jecorina (strain ATCC 56765 / BCRC 3,Trichoderma reesei,Cellobiohydrolase,42.87,4.3,1.0638,0.041,Cel7A CBHI,9.969767441860466,25.946341463414633,3.3175598522275123,4.697459222114399
+A0A024SH76,Hypocrea jecorina (strain ATCC 56765 / BCRC 3,Trichoderma reesei,Cellobiohydrolase,29.2,4.3,7.5982,0.041,Cel7A CBHI,6.790697674418605,185.3219512195122,2.7635598041779192,7.5338899671997
+P62694,Hypocrea jecorina (Trichoderma reesei),Trichoderma reesei,Cellobiohydrolase,43.97,4.3,1.0979,0.041,Cel7A CBHI,10.225581395348838,26.778048780487808,3.354110967623187,4.7429789354124905
+Q9P8P3,Trichoderma harzianum (Hypocrea lixii),Trichoderma reesei,Cellobiohydrolase,19.26,4.3,1.6132,0.041,Cel7A CBHI,4.479069767441861,39.34634146341463,2.1631991382539995,5.29815759090043
+P07987,Hypocrea jecorina (Trichoderma reesei),Trichoderma reesei,Cellobiohydrolase,29.2,4.3,7.5982,0.041,Cel7A CBHI,6.790697674418605,185.3219512195122,2.7635598041779192,7.5338899671997
+P19355,Hypocrea rufa (Trichoderma viride),Trichoderma reesei,Cellobiohydrolase,130.86,4.3,1.2898,0.041,Cel7A CBHI,30.432558139534887,31.458536585365852,4.927543705772447,4.975379654701947
+P62695,Trichoderma koningii (Hypocrea koningii),Trichoderma reesei,Cellobiohydrolase,43.97,4.3,1.0979,0.041,Cel7A CBHI,10.225581395348838,26.778048780487808,3.354110967623187,4.7429789354124905
+Q8WZJ4,Talaromyces funiculosus (Fruitlet core rot fu,Talaromyces emersonii,Cellobiohydrolase,15.01,1.29,1.7564,1.3,TeCel7A,11.635658914728682,1.351076923076923,3.5404810061974343,0.43410981632336226
+Q8WZJ4,Talaromyces funiculosus (Fruitlet core rot fu,Penicillium funiculosum,Cellobiohydrolase,15.01,2.5,1.7564,0.08,Fungal CBH,6.004,21.955,2.5859239769586013,4.4564776293518165
+Q9C1S9,Humicola insolens (Soft-rot fungus),Humicola insolens,Cellobiohydrolase,1.03,3.5,0.3639,0.1,Industrial CBH,0.2942857142857143,3.639,-1.7647105846491102,1.8635420511795793
+P15828,Humicola insolens (Soft-rot fungus),Humicola insolens,Cellobiohydrolase,2.91,3.5,0.7851,0.1,Industrial CBH,0.8314285714285715,7.851,-0.2663357689240448,2.972876425107104
+Q5B2E8,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Cellobiohydrolase,8.82,3.2,2.9778,0.065,AnCBHII,2.75625,45.81230769230769,1.4627067506701583,5.517663332102459
+Q9UVS8,Aspergillus niger,Aspergillus niger,Cellobiohydrolase,5.12,3.2,0.7814,0.065,AnCBHII,1.5999999999999999,12.02153846153846,0.6780719051126375,3.587549632267856
+B0Y8K2,Aspergillus fumigatus (strain CBS 144.89 / FG,Aspergillus niger,Cellobiohydrolase,42.3,3.2,1.0369,0.065,AnCBHII,13.218749999999998,15.952307692307691,3.7245138531199498,3.9956932370859906
+O59843,Aspergillus aculeatus,Aspergillus niger,Cellobiohydrolase,51.62,3.2,1.3778,0.065,AnCBHII,16.131249999999998,21.196923076923074,4.011786331206608,4.405782954778032
+Q5B2Q4,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Cellobiohydrolase,30.33,3.2,0.5036,0.065,AnCBHII,9.478124999999999,7.747692307692308,3.2446016877368082,2.9537666598031995
+Q8NK02,Emericella nidulans (strain FGSC A4 / ATCC 38,Aspergillus niger,Cellobiohydrolase,65.6,3.2,0.7005,0.065,AnCBHII,20.499999999999996,10.776923076923076,4.357552004618084,3.4298734274023635
+A1CU44,Aspergillus clavatus (strain ATCC 1007 / CBS ,Aspergillus niger,Cellobiohydrolase,11.75,3.2,0.8162,0.065,AnCBHII,3.671875,12.556923076923077,1.8765169465649998,3.6504110873422837
+A1DNL0,Neosartorya fischeri (strain ATCC 1020 / DSM ,Aspergillus niger,Cellobiohydrolase,15.69,3.2,1.0727,0.065,AnCBHII,4.903124999999999,16.50307692307692,2.293701542080735,4.0446631283170715
+Q4WM08,Aspergillus fumigatus (strain ATCC MYA-4609 /,Aspergillus niger,Cellobiohydrolase,42.3,3.2,1.0369,0.065,AnCBHII,13.218749999999998,15.952307692307691,3.7245138531199498,3.9956932370859906

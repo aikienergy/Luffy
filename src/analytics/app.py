@@ -150,13 +150,16 @@ def render_sources_panel(entries):
                     "Status": r.get('verification_status'),
                 })
             else:
+                is_ai = str(st_type) == 'AI-predicted'
                 rows.append({
-                    "Role": role, "Enzyme": eid, "Source": "Estimated",
+                    "Role": role, "Enzyme": eid,
+                    "Source": "AI-predicted" if is_ai else "Estimated",
                     "Organism": r.get('organism'),
-                    "Reported (as in paper)": "— (sequence heuristic, not a measurement)",
+                    "Reported (as in paper)": ("DLKcat-predicted kcat (not a measurement)"
+                                               if is_ai else "— (sequence heuristic, not a measurement)"),
                     "Simulator (kcat 1/s, Km mM)": f"{r['kcat']:.3g} / {r['Km']:.3g}",
                     "Paper": "—", "Authors (Year)": "—", "DOI": "—",
-                    "Status": "estimated (not literature)",
+                    "Status": r.get('kinetics_source', 'estimated (not literature)'),
                 })
         if rows:
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)

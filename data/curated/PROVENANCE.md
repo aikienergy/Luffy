@@ -187,6 +187,26 @@ sequence used for ESM features.
   Reference cocktail = first Literature EG/CBH/BG = GUN2_THEFU / GUX1_TRIRF /
   BGL1_ASPNG.
 
+## Non-literature kinetics tiers (AI-predicted & estimated)
+
+The enzyme universe is the balanced harvested set (EG/CBH/BG, `data/raw/
+oed_harvested.csv`) plus these 10 verified literature anchors and an LPMO
+control. Enzymes **not** in the literature table get kinetics from one of two
+clearly-labelled lower tiers (`source_type` / `kinetics_source` columns):
+
+- **AI-predicted** — `kcat` from **DLKcat** sequence+substrate predictions
+  (`data/external/dlkcat_predictions.csv`); `Km` remains the sequence heuristic
+  (CatPred Km predictions are not bundled; `scripts/run_catpred_km.py` documents
+  the reproduction step, which needs the external library).
+- **Estimated** — pure sequence heuristic (`Biophysical_Model_v2`) for enzymes
+  DLKcat did not cover.
+
+Only the **Literature** tier above is full-text confirmed; the AI-predicted and
+estimated tiers are explicitly surfaced as such in the app (badge + provenance
+panel) and are **never** treated as measurements. The calibration reference
+cocktail is drawn only from the Literature tier, so the calibrated model is
+anchored to verified values regardless of the AI/estimated rows.
+
 ## Background model references (also cited in docs/blog_luffy.md)
 - Jeoh et al. (2017) mechanistic kinetic models review, doi:10.1002/bit.26277.
 - Bansal et al. (2012) cellulose accessibility limitations, PMID 22244954.

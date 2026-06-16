@@ -30,7 +30,9 @@ from src.data_engineering import units
 from src.validation.validator import cellulose_gpl_to_glucose_equiv_mM
 
 CURATED_FILE = "data/curated/literature_kinetics.csv"
-INPUT_FILE = "data/raw/oed_100.csv"
+INPUT_FILE = "data/raw/oed_100.csv"             # source of the LPMO control enzyme
+HARVESTED_FILE = "data/raw/oed_harvested.csv"   # balanced EG/CBH/BG universe (141)
+DLKCAT_FILE = "data/external/dlkcat_predictions.csv"  # AI-predicted kcat (1/s)
 OUTPUT_FILE = "data/processed/enzyme_kinetics.csv"
 
 # Provenance columns carried through to the app for display.
@@ -149,15 +151,60 @@ def _normalise_literature_row(crow):
     }
 
 
+def _load_raw_universe():
+    """Build the enzyme universe: the balanced harvested set (EG/CBH/BG) plus the
+    LPMO control enzyme(s) from oed_100 (harvested has no LPMO). Mapped to the
+    common raw schema (id, accession, organism, name, sequence, ec_number)."""
+    h = pd.read_csv(HARVESTED_FILE)
+    name = h["enzymetype"] if "enzymetype" in h.columns else h.get("specificity")
+    if "specificity" in h.columns:
+        name = name.fillna(h["specificity"])
+    raw = pd.DataFrame({
+        "accession": h.get("accession"), "id": h["id"].astype(str),
+        "organism": h.get("organism"), "name": name,
+        "sequence": h.get("sequence"), "ec_number": h.get("ec_number"),
+        "source": "Harvested",
+    })
+    # Retain the LPMO control enzyme(s) from oed_100 so all four classes exist.
+    if os.path.exists(INPUT_FILE):
+        oed = pd.read_csv(INPUT_FILE)
+        is_lpmo = oed.apply(lambda r: classify_enzyme(r.get("name"), r.get("ec_number"),
+                                                      r.get("id")) == "LPMO", axis=1)
+        lpmo = oed[is_lpmo]
+        if len(lpmo):
+            raw = pd.concat([raw, lpmo[["accession", "id", "organism", "name",
+                                        "sequence", "ec_number", "source"]]], ignore_index=True)
+    return raw.drop_duplicates(subset="id").reset_index(drop=True)
+
+
+def _load_dlkcat():
+    """accession -> AI-predicted kcat (1/s) from DLKcat. Empty dict if absent."""
+    if not os.path.exists(DLKCAT_FILE):
+        return {}
+    d = pd.read_csv(DLKCAT_FILE)
+    kcat_col = next((c for c in d.columns if c.lower().startswith("kcat")), None)
+    if kcat_col is None or "accession" not in d.columns:
+        return {}
+    out = {}
+    for _, r in d.iterrows():
+        try:
+            out[str(r["accession"]).strip()] = float(r[kcat_col])
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def populate_kinetics():
-    if not os.path.exists(INPUT_FILE):
-        raise FileNotFoundError(f"{INPUT_FILE} not found. Run fetch_oed_data.py first.")
-    df = pd.read_csv(INPUT_FILE)
-    print(f"Loaded {len(df)} enzymes from {INPUT_FILE}.")
+    if not os.path.exists(HARVESTED_FILE):
+        raise FileNotFoundError(f"{HARVESTED_FILE} not found. Run harvest_enzymes.py first.")
+    df = _load_raw_universe()
+    print(f"Loaded {len(df)} enzymes (harvested balanced set + LPMO control).")
 
     curated = pd.read_csv(CURATED_FILE) if os.path.exists(CURATED_FILE) else pd.DataFrame()
     curated_by_id = {str(r["id"]): r for _, r in curated.iterrows()} if len(curated) else {}
-    print(f"Loaded {len(curated)} curated literature records.")
+    dlkcat = _load_dlkcat()
+    print(f"Loaded {len(curated)} curated literature records, "
+          f"{len(dlkcat)} DLKcat AI predictions.")
 
     rows = []
     for _, row in df.iterrows():
@@ -171,6 +218,7 @@ def populate_kinetics():
             base.update(norm)
             base["source_type"] = "Literature"
             base["source_detail"] = "literature_kinetics.csv"
+            base["kinetics_source"] = "Literature (full-text confirmed)"
         else:
             k, km, ki, t, p = generate_ground_truth(seq)
             base.update({
@@ -181,10 +229,21 @@ def populate_kinetics():
                 "substrate": np.nan, "substrate_type": np.nan,
                 "doi": np.nan, "pmid": np.nan, "source_title": np.nan,
                 "authors": np.nan, "year": np.nan,
-                "verification_status": "estimated (not literature)",
-                "source_type": "Estimated",
-                "source_detail": "Biophysical_Model_v2 (sequence heuristic)",
             })
+            # AI-predicted tier: use DLKcat kcat where available (Km stays
+            # heuristic -- CatPred Km predictions are not bundled). Else heuristic.
+            acc = str(row.get("accession", "")).strip()
+            if acc and acc in dlkcat:
+                base["kcat"] = round(float(dlkcat[acc]), 4)
+                base["source_type"] = "AI-predicted"
+                base["source_detail"] = "DLKcat (kcat); heuristic Km"
+                base["kinetics_source"] = "DLKcat (AI)"
+                base["verification_status"] = "AI-predicted (DLKcat kcat)"
+            else:
+                base["source_type"] = "Estimated"
+                base["source_detail"] = "Biophysical_Model_v2 (sequence heuristic)"
+                base["kinetics_source"] = "Biophysical model (heuristic)"
+                base["verification_status"] = "estimated (not literature)"
         # deterministic specificity (no randomness): cellulolytic vs other
         base["specificity"] = "Other" if enzyme_class == "LPMO" else "Cellulase"
         rows.append(base)
@@ -205,7 +264,8 @@ def populate_kinetics():
             "ec_number": crow.get("ec_number"),
             "source": "Curated_Literature",
             "source_type": "Literature",
-            "source_detail": "literature_kinetics.csv (added; not in oed_100)",
+            "source_detail": "literature_kinetics.csv (added; not in harvested set)",
+            "kinetics_source": "Literature (full-text confirmed)",
             "specificity": "Cellulase",
         }
         new_row.update(norm)
@@ -215,9 +275,8 @@ def populate_kinetics():
     out = pd.DataFrame(rows)
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     out.to_csv(OUTPUT_FILE, index=False)
-    n_lit = (out["source_type"] == "Literature").sum()
-    print(f"Saved {len(out)} enzymes to {OUTPUT_FILE} "
-          f"({n_lit} Literature, {len(out) - n_lit} Estimated).")
+    print(f"Saved {len(out)} enzymes to {OUTPUT_FILE}.")
+    print("source_type:\n", out["source_type"].value_counts().to_string())
     print("Class counts:\n", out["enzyme_class"].value_counts().to_string())
 
 

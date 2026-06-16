@@ -44,15 +44,19 @@ def stats_card(label, value, subtext=None, variant="default", help_text=None):
 
 def source_badge(source_type):
     """
-    Renders an inline provenance pill so users can instantly tell whether a
-    kinetic value is literature-sourced or a model estimate.
-        - "Literature"            -> green "Literature" pill
-        - anything else (Estimated) -> grey "Estimated" pill
+    Renders an inline provenance pill so users can instantly tell how a kinetic
+    value was obtained.
+        - "Literature"   -> green "Literature" pill (full-text verified)
+        - "AI-predicted" -> grey "AI-predicted" pill (DLKcat)
+        - anything else  -> grey "Estimated" pill (sequence heuristic)
     """
-    is_lit = str(source_type) == "Literature"
-    cls = "badge-literature" if is_lit else "badge-synthetic"
-    text = "Literature" if is_lit else "Estimated"
-    icon = "📚" if is_lit else "🧪"
+    s = str(source_type)
+    if s == "Literature":
+        cls, text, icon = "badge-literature", "Literature", "📚"
+    elif s == "AI-predicted":
+        cls, text, icon = "badge-synthetic", "AI-predicted", "🤖"
+    else:
+        cls, text, icon = "badge-synthetic", "Estimated", "🧪"
     st.markdown(f'<span class="badge {cls}">{icon} {text}</span>',
                 unsafe_allow_html=True)
 
