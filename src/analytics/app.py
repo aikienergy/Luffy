@@ -85,10 +85,12 @@ def enzyme_params(eid):
 
 def run_cocktail(eg_id, cbh_id, bg_id, fracs, cellulose_g_L, duration_h=None,
                  lignin_fraction=0.0, biomass_type='grass', particle_size=None,
-                 crystallinity=0.7, severity=0.0):
+                 crystallinity=0.7, severity=0.0, phenol_conc=0.0, furfural_conc=0.0,
+                 temp=None, ph=None):
     """Run the 3-enzyme cellulolytic cascade for a cocktail. Returns (t_h, Cel, C2, G, Cel0).
-    Biomass properties (lignin / particle / crystallinity / pretreatment severity)
-    set the substrate-attack multiplier via validator.biomass_factor()."""
+    Biomass properties (lignin / particle / crystallinity / pretreatment severity /
+    soluble inhibitors) set the substrate-attack multiplier via biomass_factor();
+    temp/ph drive the Gaussian kcat response. Defaults reproduce the calibration regime."""
     validator = EnzymeValidator()
     Cel0 = cellulose_gpl_to_glucose_equiv_mM(cellulose_g_L)
     load = config.ENZYME_LOADING_MG_PER_G_GLUCAN
@@ -97,12 +99,14 @@ def run_cocktail(eg_id, cbh_id, bg_id, fracs, cellulose_g_L, duration_h=None,
     e_bg = enzyme_mM(load * fracs[2], cellulose_g_L, config.ENZYME_MW_DA['BG'])
     bio = validator.biomass_factor(lignin_content=lignin_fraction, biomass_type=biomass_type,
                                    particle_size=particle_size, crystallinity=crystallinity,
-                                   severity=severity)
+                                   severity=severity, phenol_conc=phenol_conc,
+                                   furfural_conc=furfural_conc)
     dur = (duration_h or config.DEFAULT_DURATION_H) * 3600.0
     t, Cel, C2, G = validator.run_cellulolytic_simulation(
         enzyme_params(eg_id), enzyme_params(cbh_id), enzyme_params(bg_id),
         substrate_conc_init=Cel0, conc_EG=e_eg, conc_CBH=e_cbh, conc_BG=e_bg,
-        duration=dur, temp=config.DEFAULT_TEMP_C, ph=config.DEFAULT_PH, bio_factor=bio)
+        duration=dur, temp=config.DEFAULT_TEMP_C if temp is None else temp,
+        ph=config.DEFAULT_PH if ph is None else ph, bio_factor=bio)
     return t, Cel, C2, G, Cel0
 
 
@@ -214,10 +218,21 @@ if page == "vHTS Screening":
             pre_name = st.selectbox("Pretreatment", list(PRETREATMENT_PRESETS.keys()))
             pre = PRETREATMENT_PRESETS[pre_name]
             lignin_pct = st.slider("Lignin (%)", 5, 30, int(mat.get('lignin_fraction', 0.2) * 100))
+            # Soluble inhibitors released by (esp. acid/hydrothermal) pretreatment.
+            # Defaults scale with pretreatment severity; user can override to test
+            # a hypothesis ("how much does residual furfural cost me?").
+            _inh = pre.get('inhibitors', {})
+            with st.expander("Soluble inhibitors (post-pretreatment)"):
+                phenol_mM = st.slider("Phenolics (mM)", 0.0, 20.0,
+                                      float(_inh.get('phenol', 0.0)), 0.5,
+                                      help="Lignin-derived phenolics potently inhibit/deactivate cellulase (Ximenes 2010).")
+                furfural_mM = st.slider("Furfural/HMF (mM)", 0.0, 50.0,
+                                        float(_inh.get('furfural', 0.0)), 1.0,
+                                        help="Furans are comparatively WEAK cellulase inhibitors (high Ki).")
             bio = EnzymeValidator().biomass_factor(
                 lignin_content=lignin_pct / 100.0, biomass_type=mat.get('biomass_type', 'grass'),
                 particle_size=mat.get('particle_size'), crystallinity=mat.get('crystallinity', 0.7),
-                severity=pre['severity'])
+                severity=pre['severity'], phenol_conc=phenol_mM, furfural_conc=furfural_mM)
             cc1, cc2 = st.columns(2)
             with cc1:
                 stats_card("Lignin", f"{lignin_pct}", "% dry wt")
@@ -233,6 +248,8 @@ if page == "vHTS Screening":
                 'pretreatment_severity': pre['severity'],
                 'pretreatment_literature': pre.get('literature', {}),
                 'biomass_literature_yield': mat.get('literature_yield'),
+                'phenol_conc': phenol_mM,
+                'furfural_conc': furfural_mM,
             })
             st.divider()
             st.markdown("**Plate Format**")
@@ -283,7 +300,9 @@ if page == "vHTS Screening":
                     biomass_type=st.session_state.get('biomass_type', 'grass'),
                     particle_size=st.session_state.get('particle_size'),
                     crystallinity=st.session_state.get('crystallinity', 0.7),
-                    severity=st.session_state.get('pretreatment_severity', 0.0))
+                    severity=st.session_state.get('pretreatment_severity', 0.0),
+                    phenol_conc=st.session_state.get('phenol_conc', 0.0),
+                    furfural_conc=st.session_state.get('furfural_conc', 0.0))
                 fig = px.line(pd.DataFrame({"Time (h)": t, "Glucose": G}), x="Time (h)", y="Glucose",
                               title=f"Cellulolytic Cascade ({int(config.DEFAULT_DURATION_H)}h)",
                               color_discrete_sequence=["#10B981"])
@@ -440,19 +459,38 @@ elif page == "Process Verification":
             with CardContainer():
                 cel_g_L = st.session_state.get('cellulose_g_L', 35.0)
                 st.caption(f"Substrate: {st.session_state.get('substrate_name', 'Default')} "
-                           f"@ {cellulose_gpl_to_glucose_equiv_mM(cel_g_L):.0f} mM glucose-equiv")
-                c1, c2 = st.columns(2)
-                with c1:
-                    stats_card("Temp", f"{config.DEFAULT_TEMP_C:.0f}", "°C")
-                with c2:
-                    stats_card("pH", f"{config.DEFAULT_PH:.1f}", "")
-                vertical_spacer(0.5)
-                stats_card("Duration", f"{int(config.DEFAULT_DURATION_H)}", "Hours")
+                           f"@ {cellulose_gpl_to_glucose_equiv_mM(cel_g_L):.0f} mM glucose-equiv · "
+                           f"{st.session_state.get('pretreatment_name', '—')}")
+                # Experimental conditions (drive the Gaussian kcat response + duration).
+                st.markdown("**Experimental conditions**")
+                temp_c = st.slider("Temperature (°C)", 30.0, 80.0, float(config.DEFAULT_TEMP_C), 1.0)
+                ph_v = st.slider("pH", 3.0, 8.0, float(config.DEFAULT_PH), 0.1)
+                dur_h = st.slider("Duration (h)", 6.0, 168.0, float(config.DEFAULT_DURATION_H), 6.0)
+                st.session_state.update({'pv_temp': temp_c, 'pv_ph': ph_v, 'pv_dur': dur_h})
                 vertical_spacer(1)
                 if st.button("Run Simulation", type="primary", use_container_width=True):
                     with st.spinner("Simulating parallel reactors..."):
+                        # WT cocktail under the chosen biomass + conditions.
+                        # biomass_factor() uses `lignin_content`; run_cocktail uses
+                        # `lignin_fraction` -> keep one dict in biomass_factor's names.
+                        bio_kw = dict(
+                            lignin_content=st.session_state.get('lignin_fraction', 0.0),
+                            biomass_type=st.session_state.get('biomass_type', 'grass'),
+                            particle_size=st.session_state.get('particle_size'),
+                            crystallinity=st.session_state.get('crystallinity', 0.7),
+                            severity=st.session_state.get('pretreatment_severity', 0.0),
+                            phenol_conc=st.session_state.get('phenol_conc', 0.0),
+                            furfural_conc=st.session_state.get('furfural_conc', 0.0))
                         t_w, Cel_w, C2_w, G_w, Cel0 = run_cocktail(
-                            wt['eg_id'], wt['cbh_id'], wt['bg_id'], fracs, cel_g_L)
+                            wt['eg_id'], wt['cbh_id'], wt['bg_id'], fracs, cel_g_L,
+                            duration_h=dur_h, temp=temp_c, ph=ph_v,
+                            lignin_fraction=bio_kw['lignin_content'],
+                            biomass_type=bio_kw['biomass_type'],
+                            particle_size=bio_kw['particle_size'],
+                            crystallinity=bio_kw['crystallinity'],
+                            severity=bio_kw['severity'],
+                            phenol_conc=bio_kw['phenol_conc'],
+                            furfural_conc=bio_kw['furfural_conc'])
                         # Mutant: improved EG kcat by the predicted relative gain.
                         mut = dt['mutant'] or {}
                         b_y = mut.get('baseline_yield', 0)
@@ -465,11 +503,11 @@ elif page == "Process Verification":
                         e_eg = enzyme_mM(load * fracs[0], cel_g_L, config.ENZYME_MW_DA['EG'])
                         e_cbh = enzyme_mM(load * fracs[1], cel_g_L, config.ENZYME_MW_DA['CBH'])
                         e_bg = enzyme_mM(load * fracs[2], cel_g_L, config.ENZYME_MW_DA['BG'])
+                        bio_mut = validator.biomass_factor(**bio_kw)
                         t_m, Cel_m, C2_m, G_m = validator.run_cellulolytic_simulation(
                             eg_p, enzyme_params(wt['cbh_id']), enzyme_params(wt['bg_id']),
                             substrate_conc_init=Cel0, conc_EG=e_eg, conc_CBH=e_cbh, conc_BG=e_bg,
-                            duration=config.DEFAULT_DURATION_H * 3600.0,
-                            temp=config.DEFAULT_TEMP_C, ph=config.DEFAULT_PH)
+                            duration=dur_h * 3600.0, temp=temp_c, ph=ph_v, bio_factor=bio_mut)
                         target80 = G_w[-1] * 0.8
 
                         def t80(tt, GG):
@@ -483,7 +521,8 @@ elif page == "Process Verification":
                             't': t_w, 'G_wt': G_w, 'G_mut': G_m, 'Cel0': Cel0,
                             'eff_wt': G_w[-1], 'eff_mut': G_m[-1],
                             'time_wt_80': tw, 'time_mut_80': tm,
-                            'time_reduction_pct': red, 'target_80': target80}
+                            'time_reduction_pct': red, 'target_80': target80,
+                            'temp': temp_c, 'ph': ph_v, 'dur_h': dur_h}
                         st.rerun()
 
         with col_r:
@@ -546,4 +585,52 @@ elif page == "Process Verification":
                     with m4:
                         stats_card("Final Conversion", f"{r['eff_mut']/r['Cel0']*100:.0f}", "% (Mut)")
                 render_sources_panel([("EG", wt['eg_id']), ("CBH", wt['cbh_id']), ("BG", wt['bg_id'])])
-                st.caption("Mutant is an AI-generated in-silico variant (no experimental measurement).")
+
+                # ---- Predicted vs measured (close the hypothesis-test loop) ----
+                pred_conv = r['eff_wt'] / r['Cel0'] if r['Cel0'] else 0.0
+                with CardContainer():
+                    st.markdown("**Predicted vs measured** — enter your wet-lab glucose yield to score the prediction")
+                    pc1, pc2, pc3 = st.columns(3)
+                    with pc1:
+                        meas_pct = st.number_input("Measured final yield (%)", 0.0, 100.0, 0.0, 1.0,
+                                                   help="Leave 0 if not yet measured.")
+                    with pc2:
+                        stats_card("Predicted", f"{pred_conv*100:.0f}", "% (WT)")
+                    with pc3:
+                        if meas_pct > 0:
+                            rel = abs(pred_conv * 100 - meas_pct) / meas_pct
+                            ok = rel <= config.CALIB_TOLERANCE_REL
+                            stats_card("Rel. error", f"{rel*100:.0f}", "%",
+                                       variant="success" if ok else "default")
+                            st.caption(f"{'✅ within' if ok else '⚠️ outside'} "
+                                       f"±{int(config.CALIB_TOLERANCE_REL*100)}% tolerance "
+                                       f"(re-fit biomass model with calibrate_biomass.py if measurements accumulate).")
+                        else:
+                            stats_card("Rel. error", "—", "enter measurement")
+
+                # ---- Export protocol + result (CSV) ----
+                cond = (f"{r.get('temp', config.DEFAULT_TEMP_C):.0f}C / pH "
+                        f"{r.get('ph', config.DEFAULT_PH):.1f} / {r.get('dur_h', config.DEFAULT_DURATION_H):.0f}h")
+                export_rows = [
+                    ("substrate", st.session_state.get('substrate_name', '—')),
+                    ("pretreatment", st.session_state.get('pretreatment_name', '—')),
+                    ("lignin_fraction", st.session_state.get('lignin_fraction', 0.0)),
+                    ("phenol_mM", st.session_state.get('phenol_conc', 0.0)),
+                    ("furfural_mM", st.session_state.get('furfural_conc', 0.0)),
+                    ("conditions", cond),
+                    ("EG", wt['eg_id']), ("CBH", wt['cbh_id']), ("BG", wt['bg_id']),
+                    ("cocktail_fracs_EG_CBH_BG", "/".join(f"{x:.2f}" for x in fracs)),
+                    ("predicted_final_yield_%", round(pred_conv * 100, 1)),
+                    ("alpha_calibration", config.get_accessibility_alpha()),
+                    ("biomass_params", config.get_biomass_params()),
+                    ("provenance", "data/curated/PROVENANCE.md"),
+                ]
+                export_df = pd.DataFrame(export_rows, columns=["field", "value"])
+                st.download_button(
+                    "⬇ Export protocol + result (CSV)",
+                    export_df.to_csv(index=False).encode("utf-8"),
+                    file_name="luffy_protocol.csv", mime="text/csv",
+                    use_container_width=True)
+                st.caption("Mutant is an AI-generated in-silico variant (no experimental measurement). "
+                           "Measured-yield scoring uses the calibration tolerance; the export bundles "
+                           "conditions, cocktail, predicted yield, and the provenance pointer.")

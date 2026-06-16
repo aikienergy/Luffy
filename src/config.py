@@ -142,27 +142,129 @@ PLAUSIBILITY_BANDS = {
     "EG":  {"kcat": (1e-2, 1e4), "Km": (0.1, 200.0)},   # soluble + insoluble; apparent Km
 }
 
-# --------------------------------------------------------------------------
-# Real-biomass support: lignin inhibition & geometric accessibility (Phase 3
-# integration). These parameterise the substrate-property multipliers applied
-# to the cellulose-attack rate in src/validation/validator.py. They are a
-# separate effect from the conversion-dependent accessibility decay `alpha`
-# (alpha = how the rate falls as conversion proceeds; the factors below = how
-# a given biomass/pretreatment gates the initial attackable surface).
-# --------------------------------------------------------------------------
-# Lignin hydrophobicity index by biomass type (drives non-productive cellulase
-# adsorption to lignin). Li & Zheng (2017) -- S/G ratio sets adsorption strength.
+# ==========================================================================
+# Real-biomass support: lignin inhibition & geometric accessibility (Phase 3).
+# These parameterise the substrate-property multipliers applied to the
+# cellulose-attack rate in src/validation/validator.py. They are a separate
+# effect from the conversion-dependent accessibility decay `alpha` (alpha = how
+# the rate falls as conversion proceeds; the factors below = how a given
+# biomass/pretreatment gates the initial attackable surface).
+#
+# PROVENANCE DISCIPLINE (mirrors the kinetics layer): each constant below is
+# tagged as either
+#   [MEASURED]  -- a value read verbatim from full text (documented with a DOI
+#                  and quote in data/curated/PROVENANCE.md "Substrate-property
+#                  layer" section), OR
+#   [PARAMETER] -- a structural/assumed model parameter that is NOT a direct
+#                  measurement. Where a [PARAMETER] is fit to literature yield
+#                  bands it is "calibrated" by calibrate_biomass.py and the
+#                  fitted value is persisted to biomass_calibration.json.
+# This separation is what keeps the layer honest: a [PARAMETER] must never be
+# presented to the user as a measurement.
+# ==========================================================================
+
+# --- Lignin hydrophobicity, by biomass type -------------------------------
+# [PARAMETER, assumed-ordinal] Drives non-productive cellulase adsorption to
+# lignin. The literature (Li & Zheng 2017, Biotechnol Adv 35(4):466-489,
+# doi:10.1016/j.biotechadv.2017.03.010; primary data Yu et al. 2014,
+# Biotechnol Biofuels 7:38, PMC3995585) supports a DIRECTION only:
+# GUAIACYL-rich lignin (softwood, LOW S/G ratio) adsorbs cellulase MORE strongly
+# than syringyl-rich (hardwood, high S/G) lignin -- "the lower the S/G ratio, the
+# higher affinity". No paper tabulates a dimensionless 0-1 index; these numbers
+# encode that rank ORDER only and their magnitudes are assumed, not measured
+# (kept fixed; not calibrated).
 HYDROPHOBICITY_INDEX = {
-    "softwood": 0.85,   # high syringyl content -> strong adsorption
-    "hardwood": 0.65,
-    "grass": 0.50,      # p-coumarate esters
+    "softwood": 0.85,   # guaiacyl-rich (low S/G) -> strongest adsorption
+    "hardwood": 0.65,   # syringyl-rich (high S/G) -> weaker adsorption
+    "grass": 0.50,      # p-coumarate/ferulate esters -> weakest
 }
 
-# Inhibition constants. Phenol/furfural Ki: Ximenes et al. (2010); k_ads is the
-# Langmuir constant for the lignin-adsorption term.
+# --- Soluble-inhibitor constants (mM) -------------------------------------
+# [PARAMETER] None of these is a full-text Ki: the primary literature reports
+# phenol/furan effects as % deactivation or mg-ratios, NOT Michaelis Ki in mM
+# (see PROVENANCE.md "Soluble inhibitors"). They are calibrated/assumed scales
+# encoding the well-established MECHANISM: phenolics are POTENT cellulase
+# inhibitors/deactivators (small Ki) whereas furans (furfural/HMF) are
+# comparatively WEAK on the enzymes (large Ki) -- so ki_phenol << ki_furfural.
+#   Mechanism refs: phenols  -> Ximenes et al. 2010, Enzyme Microb Technol
+#                   46(3-4):170, doi:10.1016/j.enzmictec.2009.11.001; 2011
+#                   48(1):54, doi:10.1016/j.enzmictec.2010.09.006 (PMID 22112771).
+#                   furans   -> Kim et al. 2011, Enzyme Microb Technol
+#                   48(4-5):408, doi:10.1016/j.enzmictec.2011.01.007
+#                   (PMID 22112958) -- furans weak; phenolics are the cause.
 INHIBITION_CONSTANTS = {
-    "ki_phenol": 8.0,     # mM
-    "ki_furfural": 2.0,   # mM
-    "ki_hmf": 5.0,        # mM (hydroxymethylfurfural)
-    "k_ads": 0.15,        # Langmuir adsorption constant
+    "ki_phenol": 8.0,     # mM  [PARAMETER] phenolics potent -> small Ki
+    "ki_furfural": 50.0,  # mM  [PARAMETER] furans weak -> large Ki (>> ki_phenol)
+    "ki_hmf": 60.0,       # mM  [PARAMETER] HMF weaker still
+    "k_ads": 0.15,        # [PARAMETER, calibrated] Langmuir lignin-adsorption const
+}
+
+# --- Geometric accessibility parameters -----------------------------------
+# [PARAMETER, calibrated] Surface-accessibility law in validator.calculate_
+# accessibility: surface_factor = 1/(1 + (particle_size/D_REF)**EXPONENT).
+# Smaller particles / lower crystallinity expose more attackable surface
+# (qualitatively per Alvira et al. 2010, doi:10.1016/j.biortech.2009.11.093);
+# D_REF and EXPONENT are NOT measured -- they are fit to literature yield bands
+# by calibrate_biomass.py (result in biomass_calibration.json).
+GEOMETRIC_ACCESSIBILITY = {
+    "d_ref": 0.5,       # mm, reference particle size
+    "exponent": 1.5,    # surface-decay exponent
+}
+
+# --------------------------------------------------------------------------
+# Biomass-property calibration persistence (analogous to calibration.json for
+# alpha). calibrate_biomass.py fits the [PARAMETER, calibrated] structural
+# constants {k_ads, d_ref, exponent} so the predicted conversion per
+# (biomass x pretreatment) lands inside that combination's literature yield
+# band. Until calibrated, the documented defaults above are used.
+# --------------------------------------------------------------------------
+_BIOMASS_CALIBRATION_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "data", "curated", "biomass_calibration.json"
+)
+
+
+def get_biomass_params():
+    """Return calibrated {k_ads, d_ref, exponent}, falling back to documented
+    defaults. Used by the validator's substrate-property factors so that a
+    biomass calibration (if present) is honoured everywhere consistently."""
+    defaults = {
+        "k_ads": INHIBITION_CONSTANTS["k_ads"],
+        "d_ref": GEOMETRIC_ACCESSIBILITY["d_ref"],
+        "exponent": GEOMETRIC_ACCESSIBILITY["exponent"],
+    }
+    try:
+        with open(_BIOMASS_CALIBRATION_FILE, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        fitted = data.get("parameters", {})
+        for k in defaults:
+            if k in fitted:
+                defaults[k] = float(fitted[k])
+    except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
+        pass
+    return defaults
+
+
+def save_biomass_params(params, metadata=None):
+    """Persist the fitted biomass structural parameters (used by calibrate_biomass)."""
+    os.makedirs(os.path.dirname(_BIOMASS_CALIBRATION_FILE), exist_ok=True)
+    payload = {"parameters": {k: float(v) for k, v in params.items()}}
+    if metadata:
+        payload.update(metadata)
+    with open(_BIOMASS_CALIBRATION_FILE, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2)
+
+
+# --- Plausibility bands for substrate-property constants -------------------
+# [audit] Guard rails for the substrate-property layer, analogous to
+# PLAUSIBILITY_BANDS for kinetics. A calibrated/edited constant outside its band
+# signals a transcription or fitting error. Enforced by tests/test_plausibility.py.
+SUBSTRATE_PROPERTY_BANDS = {
+    "ki_phenol_mM": (0.5, 50.0),      # phenol cellulase Ki / IC50 range
+    "ki_furfural_mM": (5.0, 200.0),   # furans weak -> high Ki
+    "ki_hmf_mM": (5.0, 300.0),
+    "k_ads": (0.01, 5.0),             # Langmuir adsorption constant
+    "d_ref_mm": (0.05, 5.0),          # reference particle size
+    "accessibility_exponent": (0.5, 4.0),
+    "lignin_fraction": (0.05, 0.40),  # dry-weight lignin fraction of biomass
+    "crystallinity": (0.30, 0.85),    # cellulose crystallinity index (CrI)
 }

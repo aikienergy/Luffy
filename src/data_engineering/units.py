@@ -36,6 +36,24 @@ SOLUBLE_SUBSTRATE_MW = {
 POLYMERIC_SUBSTRATES = {"avicel", "cmc", "carboxymethylcellulose", "pasc",
                         "filter paper", "cellulose", "bmcc", "bacterial cellulose"}
 
+# Molar masses (g/mol) of common soluble cellulase INHIBITORS, for mg/mL <-> mM.
+# Lignin-derived phenolics + furan aldehydes whose Ki/IC50 are reported in the
+# pretreatment-inhibition literature (used by ki_to_mM, same audit rule as Km).
+INHIBITOR_MW = {
+    "phenol": 94.11,
+    "furfural": 96.08,
+    "hmf": 126.11,              # 5-hydroxymethylfurfural
+    "5-hmf": 126.11,
+    "vanillin": 152.15,
+    "syringaldehyde": 182.17,
+    "p-coumaric acid": 164.16,
+    "ferulic acid": 194.18,
+    "4-hydroxybenzoic acid": 138.12,
+    "gallic acid": 170.12,
+    "catechol": 110.11,
+    "tannic acid": 1701.20,
+}
+
 
 def kcat_to_per_s(value, unit, mw_kda=None):
     """
@@ -102,3 +120,45 @@ def km_to_mM(value, unit, mw_g_per_mol=None, substrate=None):
         # (g/L) / (g/mol) = mol/L ; * 1000 -> mM
         return float(value) / float(mw) * 1000.0
     raise ValueError(f"Unrecognised Km unit: {unit!r}")
+
+
+def ki_to_mM(value, unit, mw_g_per_mol=None, inhibitor=None):
+    """
+    Convert a reported inhibition constant Ki (or IC50) to mM.
+
+    Inhibitors here are DEFINED soluble small molecules (phenol, furfural, HMF,
+    lignin-derived phenolics), so — unlike insoluble cellulose — a molar mass is
+    always available and a mass concentration CAN be expressed in mM.
+
+    Supported units (case-insensitive):
+        - "mM"                          -> identity
+        - "uM", "um"                    -> value / 1000
+        - "M", "mol/l"                  -> value * 1000
+        - "g/l", "mg/ml", "kg/m3"       -> needs a molar mass, supplied either as
+              `mw_g_per_mol` or via an `inhibitor` name present in INHIBITOR_MW.
+
+    Returns float (mM). Raises ValueError on an unknown unit, or on a mass
+    concentration with no resolvable molar mass (FAIL LOUD — a Ki silently left
+    in g/L would corrupt the non-competitive inhibition term).
+    """
+    if value is None:
+        return None
+    u = str(unit).strip().lower().replace(" ", "")
+    if u in ("mm",):
+        return float(value)
+    if u in ("um", "µm"):
+        return float(value) / 1000.0
+    if u in ("m", "mol/l"):
+        return float(value) * 1000.0
+    if u in ("g/l", "mg/ml", "kg/m3"):
+        # g/L and mg/mL are numerically identical mass concentrations.
+        mw = mw_g_per_mol
+        if mw is None and inhibitor is not None:
+            mw = INHIBITOR_MW.get(str(inhibitor).strip().lower())
+        if mw is None:
+            raise ValueError(
+                f"Ki in '{unit}' needs a molar mass (mw_g_per_mol or a known "
+                f"inhibitor); got inhibitor={inhibitor!r}")
+        # (g/L) / (g/mol) = mol/L ; * 1000 -> mM
+        return float(value) / float(mw) * 1000.0
+    raise ValueError(f"Unrecognised Ki unit: {unit!r}")

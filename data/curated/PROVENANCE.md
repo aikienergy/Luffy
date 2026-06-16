@@ -212,3 +212,109 @@ anchored to verified values regardless of the AI/estimated rows.
 - Bansal et al. (2012) cellulose accessibility limitations, PMID 22244954.
 - Keller et al. (2020) cellulase kinetics review (states the ~0.02 s⁻¹ / 3–5 g/L
   Cel7A figure citing Sørensen 2015), *Biotechnol. Biofuels*, PMC7350674.
+
+---
+
+# Substrate-property layer — Provenance ledger (real-biomass model)
+
+The real-biomass model (`src/validation/validator.py`: lignin inhibition x
+geometric accessibility) adds a second class of constants. A full-text audit of
+this layer (2026-06-16, network-permissive session: NCBI E-utilities, PMC,
+publishers, UniProt) found the same failure mode the kinetics audit found —
+**"sourced" ≠ "correct"** — and applies the same discipline. Every constant is
+tagged **[MEASURED]** (verbatim from full text) or **[PARAMETER]**
+(structural/assumed; if fit to data, "calibrated"). A [PARAMETER] is never shown
+to the user as a measurement.
+
+## Corrections to the previous (search-sourced) pass
+
+Full-text checking exposed **systematic citation errors** in the inhibition /
+adsorption constants — every supplied DOI resolved to an unrelated paper:
+
+- **All three inhibition-constant Ki values are NOT measurements.** `ki_phenol`,
+  `ki_furfural`, `ki_hmf` had no full-text support as a Michaelis Ki in mM. The
+  primary literature reports phenol/furan effects as **% deactivation or
+  mg-protein ratios, not a Ki** (e.g. Ximenes 2011: phenolics "caused 20–80%
+  deactivation of cellulases and/or β-glucosidases after 24 h of
+  pre-incubation"). → reclassified **[PARAMETER]**.
+- **Furfural/HMF were misattributed to Ximenes et al. (2010).** That paper is
+  about **phenols** and does not study furans. The furan-relevant primary source
+  is **Kim et al. (2011)**, which finds **phenolics — not furans — are the
+  inhibitory cause**; furans are comparatively **weak** cellulase inhibitors. The
+  pre-correction ordering (furfural `Ki=2` "stronger" than phenol `Ki=8`)
+  **contradicted the literature**; the model now uses `ki_furfural`,`ki_hmf` >>
+  `ki_phenol` (test-gated).
+- **Three DOIs were wrong** (each resolved to an unrelated article) and are
+  corrected below.
+- **The lignin-hydrophobicity rationale was biologically inverted.** The code
+  said "softwood = high syringyl content → strong adsorption". Softwood is in
+  fact **guaiacyl-rich (low S/G)**, and it is **low S/G (high guaiacyl)** that
+  drives strong adsorption (Yu et al. 2014: "the lower the S/G ratio, the higher
+  affinity… G lignin had a higher adsorption capacity… than syringyl (S)
+  lignin"). The rank order softwood > hardwood > grass is kept; the rationale is
+  rewritten and the magnitudes documented as an assumed ordinal **[PARAMETER]**.
+
+## Inhibition / adsorption / accessibility constants (`src/config.py`)
+
+| Constant | Value | Tag | Basis |
+|---|---|---|---|
+| `ki_phenol` | 8.0 mM | [PARAMETER] | phenolics potent (small Ki). Mechanism: Ximenes et al. 2010, *Enzyme Microb Technol* 46(3-4):170, **doi:10.1016/j.enzmictec.2009.11.001**; 2011, 48(1):54, **doi:10.1016/j.enzmictec.2010.09.006**, PMID 22112771. No Ki in mM is reported. |
+| `ki_furfural` | 50 mM | [PARAMETER] | furans weak (large Ki). Kim et al. 2011, *Enzyme Microb Technol* 48(4-5):408, **doi:10.1016/j.enzmictec.2011.01.007**, PMID 22112958. |
+| `ki_hmf` | 60 mM | [PARAMETER] | HMF weaker still; same source. |
+| `k_ads` | calibrated | [PARAMETER, calibrated] | Langmuir lignin-adsorption constant; fit by `calibrate_biomass.py` to literature yield bands → `biomass_calibration.json`. |
+| `HYDROPHOBICITY_INDEX` (0.85/0.65/0.50) | assumed ordinal | [PARAMETER] | rank order only (softwood > hardwood > grass). Li & Zheng 2017, *Biotechnol Adv* 35(4):466, **doi:10.1016/j.biotechadv.2017.03.010**, PMID 28351654; primary Yu et al. 2014, *Biotechnol Biofuels* 7:38, **PMC3995585**. |
+| `d_ref`, `exponent` (accessibility) | calibrated | [PARAMETER, calibrated] | surface-accessibility law; qualitatively per Alvira et al. 2010, **doi:10.1016/j.biortech.2009.11.093**; fit by `calibrate_biomass.py`. |
+
+## Biomass composition (`src/resources/materials.py`) — [MEASURED]
+
+| Biomass | Cellulose/Hemi/Lignin (rep. % dw) | Source (DOI) |
+|---|---|---|
+| Rice straw | 35 / 24 / 17 (ash ~14) | Binod et al. 2010, *Bioresour Technol* 101(13):4767, **doi:10.1016/j.biortech.2009.10.079**, PMID 19944601 |
+| Wheat straw | 35 / 24 / 17 | Alvira et al. 2010, **doi:10.1016/j.biortech.2009.11.093** (Table 1 from Sun & Cheng 2002, doi:10.1016/S0960-8524(01)00212-7) |
+| Corn stover | 37 / 21 / 18 | Templeton et al. 2010, *J Agric Food Chem* 58(16):9054, **doi:10.1021/jf100807b**, PMC2923869; NREL TP-510-32438 |
+| Sugarcane bagasse | 45 / 27 / 22 | Pandey et al. 2000, *Bioresour Technol* 74(1):69, **doi:10.1016/S0960-8524(99)00142-X** |
+| Spent coffee grounds | 12 / 39 / 24 (protein ~17) | Ballesteros et al. 2014, *Food Bioprocess Technol* 7(12):3493, **doi:10.1007/s11947-014-1349-z** |
+
+## Rice-straw saccharification yield bands (`PRETREATMENT_PRESETS`) — [MEASURED], verbatim
+
+Replaces the prior journal-name-only "sources" (unverifiable). These bands are
+the calibration targets for `calibrate_biomass.py`.
+
+- **Simple crushing / mechanical — band 0.30–0.45.** Yu et al. (2024), *Agronomy*
+  14(11):2550, **doi:10.3390/agronomy14112550** (OA). Verbatim: "…the 36.24%
+  yield from untreated straw… the 73.25% yield from ball milled straw."
+- **Dilute acid — band 0.60–0.75.** Agrawal et al. (2018), *Front Energy Res*
+  6:115, **doi:10.3389/fenrg.2018.00115** (OA). Verbatim: "the highest glucan
+  conversion obtained was 66% after 30 h… improved to 70%… 72%…" (~84% at low
+  solids).
+- **Hydrothermal / LHW — band 0.80–0.90.** Yu G. et al. (2010), *Appl Biochem
+  Biotechnol* 160(2):539, **doi:10.1007/s12010-008-8420-z**, PMID 19125228.
+  Verbatim: "The glucose yield by enzymatic hydrolysis of pretreated rice straw
+  was no less than 85% at 180 °C and above for 30-min pretreatment."
+- **Steam explosion — band 0.85–1.00.** Wood et al. (2016), *Biotechnol Biofuels*
+  9:193, **doi:10.1186/s13068-016-0599-6**, PMC5011935 (OA); Semwal et al.
+  (2019), *Biomass Bioenergy* 130:105390, **doi:10.1016/j.biombioe.2019.105390**.
+  Verbatim: "…steam explosion at 210 °C for 10 min… virtually all of the
+  measurable glucose… was released."
+
+## Calibration of the substrate-property model (`biomass_calibration.json`)
+
+The three structural [PARAMETER, calibrated] constants `{k_ads, d_ref,
+exponent}` are fit by `src/data_engineering/calibrate_biomass.py` so the
+predicted cellulose→glucose conversion of the rice-straw pretreatment series
+lands inside each band above (3 parameters vs 4 grounded bands). Because
+`bio_factor ≤ 1` and the accessibility `alpha` is calibrated so `bio_factor=1.0`
+→ ~0.80 conversion, the model has a ~0.79 conversion **ceiling**; the most severe
+pretreatments (LHW/steam, lit. ≥85%) saturate to that ceiling, which is reported
+honestly as "ceiling-limited", not gamed. Pretreatment `severity` (0–1) is a
+calibrated normalised effectiveness input ordered to the verified yield series
+(it is **not** a measured combined-severity factor). The fit is regenerated with
+`python -m src.data_engineering.calibrate_biomass`.
+
+## Verification status (substrate-property layer)
+- **[MEASURED]:** biomass composition and the rice-straw yield bands are
+  full-text confirmed with primary DOIs (above).
+- **[PARAMETER]:** all inhibition Ki, lignin-hydrophobicity indices, and the
+  geometric/adsorption constants are calibrated/assumed model parameters — **not
+  measurements** — and are surfaced as such in the app and tests
+  (`tests/test_plausibility.py`, `tests/test_biomass_calibration.py`).

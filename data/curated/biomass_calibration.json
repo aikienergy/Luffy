@@ -1,0 +1,62 @@
+{
+  "parameters": {
+    "k_ads": 0.7650000000599122,
+    "d_ref": 0.5006646079425198,
+    "exponent": 1.3626431070611922
+  },
+  "method": "fit {k_ads, d_ref, exponent} to literature yield bands",
+  "status": "PASS",
+  "targets_in_band": "4/4",
+  "reference_enzymes": {
+    "EG": "GUN2_THEFU",
+    "CBH": "GUX1_TRIRF",
+    "BG": "BGL1_ASPNG"
+  },
+  "report": [
+    {
+      "target": "Rice Straw / Simple Crushing",
+      "band": [
+        0.3,
+        0.45
+      ],
+      "bio_factor": 0.154,
+      "achieved": 0.396,
+      "ceiling_limited": false,
+      "pass": true
+    },
+    {
+      "target": "Rice Straw / Dilute Acid",
+      "band": [
+        0.6,
+        0.75
+      ],
+      "bio_factor": 0.579,
+      "achieved": 0.675,
+      "ceiling_limited": false,
+      "pass": true
+    },
+    {
+      "target": "Rice Straw / Hydrothermal",
+      "band": [
+        0.8,
+        0.9
+      ],
+      "bio_factor": 0.903,
+      "achieved": 0.77,
+      "ceiling_limited": true,
+      "pass": true
+    },
+    {
+      "target": "Rice Straw / Steam Explosion",
+      "band": [
+        0.85,
+        1.0
+      ],
+      "bio_factor": 0.964,
+      "achieved": 0.783,
+      "ceiling_limited": true,
+      "pass": true
+    }
+  ],
+  "note": "Calibrated model parameters, NOT measurements. Yield bands and their citations are in src/resources/materials.py / PROVENANCE.md."
+}

@@ -35,3 +35,28 @@ def test_km_polymeric_returns_none():
 def test_km_unknown_unit_raises():
     with pytest.raises(ValueError):
         units.km_to_mM(1.0, "smoots")
+
+
+def test_ki_units_molar_and_micromolar():
+    assert units.ki_to_mM(8.0, "mM") == 8.0
+    assert units.ki_to_mM(2000, "uM") == pytest.approx(2.0)
+    assert units.ki_to_mM(0.005, "M") == pytest.approx(5.0)
+
+
+def test_ki_mass_concentration_needs_molar_mass():
+    # 0.9411 g/L phenol (MW 94.11) -> 10 mM
+    assert units.ki_to_mM(0.9411, "g/L", inhibitor="phenol") == pytest.approx(10.0, rel=1e-3)
+    # furfural 0.09608 g/L (MW 96.08) -> 1 mM
+    assert units.ki_to_mM(0.09608, "g/L", inhibitor="furfural") == pytest.approx(1.0, rel=1e-3)
+    # explicit molar mass also works
+    assert units.ki_to_mM(0.12611, "mg/mL", mw_g_per_mol=126.11) == pytest.approx(1.0, rel=1e-3)
+
+
+def test_ki_mass_without_molar_mass_fails_loud():
+    with pytest.raises(ValueError):
+        units.ki_to_mM(1.0, "g/L", inhibitor="mystery-compound")
+
+
+def test_ki_unknown_unit_raises():
+    with pytest.raises(ValueError):
+        units.ki_to_mM(1.0, "smoots")

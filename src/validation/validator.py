@@ -74,29 +74,51 @@ class EnzymeValidator:
     # ------------------------------------------------------------------
     def calculate_accessibility(self, particle_size, crystallinity=0.7, severity=0.0):
         """Geometric accessibility factor in [0.01, 0.99]. Smaller particles and
-        lower crystallinity (or harsher pretreatment, which breaks crystalline
-        structure) expose more attackable surface. Alvira et al. (2010)."""
-        D_REF, EXPONENT = 0.5, 1.5
-        surface_factor = 1.0 / (1.0 + (float(particle_size) / D_REF) ** EXPONENT)
-        crystal_factor = 1.0 - float(crystallinity) * (1.0 - float(severity))
-        return max(0.01, min(0.99, surface_factor * crystal_factor))
+        lower crystallinity expose more attackable surface; pretreatment severity
+        physically opens up that surface (defibrillation + decrystallisation), so
+        accessibility interpolates toward full exposure as severity -> 1
+        (qualitatively per Alvira et al. 2010). D_REF/EXPONENT are calibrated
+        model parameters (not measured) from config.get_biomass_params() so a
+        biomass calibration is honoured here (see calibrate_biomass.py).
+
+        At severity=0 this equals the untreated surface x (1-crystallinity)
+        accessibility (back-compatible with the pre-calibration formula)."""
+        bp = config.get_biomass_params()
+        d_ref, exponent = bp["d_ref"], bp["exponent"]
+        surface_factor = 1.0 / (1.0 + (float(particle_size) / d_ref) ** exponent)
+        base = surface_factor * (1.0 - float(crystallinity))   # untreated accessible fraction
+        access = base + float(severity) * (1.0 - base)         # pretreatment exposes surface
+        return max(0.01, min(0.99, access))
 
     def calculate_inhibition_factor(self, lignin_content, biomass_type="grass",
                                     phenol_conc=0.0, furfural_conc=0.0,
-                                    ki_phenol=None, ki_furfural=None):
+                                    severity=0.0, ki_phenol=None, ki_furfural=None):
         """Lignin inhibition factor in [0.01, 0.99] (1.0 = no inhibition).
-        Langmuir non-productive adsorption to lignin + non-competitive phenol/
-        furfural inhibition. Li & Zheng (2017), Ximenes et al. (2010)."""
+        Langmuir non-productive adsorption to lignin (k_ads is a calibrated model
+        parameter) + non-competitive phenol/furfural inhibition (Ki from the
+        soluble-inhibitor literature; see data/curated/PROVENANCE.md).
+
+        Pretreatment severity DELIGNIFIES the substrate, lowering non-productive
+        adsorption, so the lignin term relaxes toward no-inhibition as
+        severity -> 1 (this is what lets steam-explosion-grade pretreatment reach
+        the high literature yield bands; without it the model is capped by the
+        raw-biomass lignin content). Lignin adsorption ordering follows Li &
+        Zheng (2017); phenol cellulase inhibition follows Ximenes et al. (2010);
+        furans are weak cellulase inhibitors so furfural has a small effect.
+
+        At severity=0 this equals the pre-calibration formula (back-compatible)."""
         hydro = config.HYDROPHOBICITY_INDEX.get(biomass_type, 0.65)
-        k_ads = config.INHIBITION_CONSTANTS["k_ads"]
+        k_ads = config.get_biomass_params()["k_ads"]
         ki_ph = config.INHIBITION_CONSTANTS["ki_phenol"] if ki_phenol is None else ki_phenol
         ki_fur = config.INHIBITION_CONSTANTS["ki_furfural"] if ki_furfural is None else ki_furfural
         L = float(lignin_content)
         denom = k_ads + L * hydro
         alpha_ads = (L * hydro) / denom if denom > 0 else 0.0
+        base_inhib = 1.0 - alpha_ads
+        lignin_factor = base_inhib + float(severity) * (1.0 - base_inhib)  # delignification
         phenol_factor = 1.0 / (1.0 + phenol_conc / ki_ph) if ki_ph > 0 else 1.0
         furfural_factor = 1.0 / (1.0 + furfural_conc / ki_fur) if ki_fur > 0 else 1.0
-        return max(0.01, min(0.99, (1.0 - alpha_ads) * phenol_factor * furfural_factor))
+        return max(0.01, min(0.99, lignin_factor * phenol_factor * furfural_factor))
 
     def biomass_factor(self, lignin_content=0.0, biomass_type="grass",
                        particle_size=None, crystallinity=0.7, severity=0.0,
@@ -106,7 +128,8 @@ class EnzymeValidator:
         bio = 1.0
         if lignin_content and float(lignin_content) > 0:
             bio *= self.calculate_inhibition_factor(lignin_content, biomass_type,
-                                                    phenol_conc, furfural_conc)
+                                                    phenol_conc, furfural_conc,
+                                                    severity=severity)
         if particle_size is not None:
             bio *= self.calculate_accessibility(particle_size, crystallinity, severity)
         return bio
